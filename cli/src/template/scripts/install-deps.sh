@@ -24,7 +24,7 @@ fi
 # ── 2. Graphify ─────────────────────────────────────────────────
 echo ""
 echo "--- Graphify ---"
-if python3 -c "import graphify" 2>/dev/null; then
+if {PYTHON_COMMAND} -c "import graphify" 2>/dev/null; then
   echo "  ✓ graphify already installed"
 else
   echo "  Installing graphify..."
