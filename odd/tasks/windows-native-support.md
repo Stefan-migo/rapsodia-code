@@ -174,6 +174,8 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 | T8b | Carry `{PYTHON_COMMAND}` in the remaining template docs, skills and scripts | 7 template files | [x] |
 | T12 | Serialize the captured streams in the defect payload, and scrub a quoted path as a unit | `defect.ts` | [x] |
 | T13 | Route the last two `child_process` bypasses through `utils/exec` | `init.ts`, `adopt.ts` | [x] |
+| T6 | Delete the template scripts the CLI already provides | `template/scripts/generate-retrospective.sh` | [x] |
+| T7 | Template tools — **kept**: the CLI has no sandbox, wiki-search or wiki-link equivalent | `template/.opencode/tools/**` | [ ] kept |
 
 ## Acceptance criteria
 
@@ -484,6 +486,49 @@ above exits 0; `adopt --dry-run` resolves `isDirty` inside a repository (no warn
 "Could not determine whether the working tree is dirty" outside one; `npm run typecheck` and
 `npm run build` pass; `cross-spawn` stays bundled (12 references, zero `require("cross-spawn")`).
 
+### Fifth Windows pass (2026-09-19) — T6 scoped to the one file that was actually redundant
+
+**The task premise was wrong, and the measurement is the record.** T6 recorded that "several" template
+scripts duplicate existing CLI commands. Reading all seven files in T6/T7 scope and searching every
+reference found **one** that is pure redundancy: `scripts/generate-retrospective.sh`, whose entire body
+is `rapso close --retrospective "$@"` — a wrapper that re-invokes the CLI, under a header comment
+("Called by: rapso close --retrospective") that inverts the relationship, because the CLI never calls
+it. It is deleted. The other six are kept, because each is the only provider of something:
+
+| File | Why it stays |
+|------|--------------|
+| `scripts/engram-export-wiki.sh` | the export is duplicated (`session.ts:121`) but the `wiki/log.md` append is not, and 6 shipped files reference it |
+| `scripts/install-deps.sh` | `rapso install` only *detects* (`install.ts:49-61`); nothing in the CLI runs `pip install graphifyy` |
+| `scripts/setup.sh` | the only writer of `.planning/` |
+| `.opencode/tools/execute_script.ts` | no CLI sandbox; referenced by 4 shipped docs |
+| `.opencode/tools/wiki-link.ts` | no CLI link-graph analysis |
+| `.opencode/tools/wiki-search.ts` | no CLI wiki search |
+
+T7 is therefore closed as "kept", not as "deleted".
+
+**Verified by execution.** `init afterdel` exits 0 and copies 40 files (was 41); `afterdel/scripts/`
+holds the three remaining scripts; no shipped file references the deleted one (`grep -rn
+generate-retrospective cli/src/template/` is empty). `update --check` on a project generated *before*
+the deletion reports `3 file(s) removed from template (not deleted from project)` — one more than the
+two it reported before, which is exactly this deletion — and nothing is removed from the project.
+
+**Two pre-existing reporting defects, surfaced here and deliberately not fixed.** They are why the
+deletion above is hard to see, and neither is caused by it:
+
+- `detectChanges` (`manifest.ts:111-115`) flags every manifest path absent from the template, and
+  `init` tracks `.gitignore` and `.opencode/.gitignore` — files the CLI writes itself (`init.ts:72`,
+  because npm cannot publish a file named `.gitignore`). So **every** generated project reports 2
+  phantom removals on every run, forever, and a real removal drowns in that noise.
+- `update --dry-run` short-circuits at `update.ts:114` when nothing was added, modified or
+  user-modified, before the removal block at `:142`, so it answers "Template is already up to date"
+  while `--check` prints the removals. `--check` is the mode that reports them.
+
+Also surfaced and not actioned: `template/.opencode/skills/rapso-session/SKILL.md:149,159` instructs
+every generated project to use `scripts/rapso-sync.sh`, which does not ship in the template (only the
+repository root has it) and has no `rapso sync` subcommand to replace it — a dangling instruction in
+every generated project. And `rapso close --no-export` is cosmetic: `close.ts:83` calls `closeSession`
+unconditionally and `session.ts:107-130` always exports, so the flag only gates a console step.
+
 ## Next step
 
 **Windows verification is done and this branch is a Windows support claim** for T1, T2, T2b, T3,
@@ -504,10 +549,10 @@ each candidate with `accessSync(path, X_OK)`, but that call does **not** reject 
 App Execution Alias reparse points — Node's `X_OK` behaves like `F_OK` on Windows. The interpreter
 failure came from the candidate order instead. See the second Windows pass above.
 
-**Remaining scope, deferred and still open:** T6 (template scripts — delete the redundant ones
-rather than port; needs an explicit human decision before anything is deleted), T7 (template tools
-`execute_script.ts`, `wiki-link.ts`, `wiki-search.ts`) and T9 (`rapso-init.sh` to a CLI subcommand).
-T2, T2b, T5, T8, T8b, T12 and T13 are closed. Maintainer-only surfaces (`.githooks/**`,
+**Remaining scope, deferred and still open:** T9 (`rapso-init.sh` to a CLI subcommand), and the two
+pre-existing reporting defects recorded in the fifth pass (the phantom `.gitignore` removals and
+`--dry-run` hiding removals). T2, T2b, T5, T6, T8, T8b, T12 and T13 are closed; T7 is closed as
+"kept, because the CLI does not cover those capabilities". Maintainer-only surfaces (`.githooks/**`,
 `scripts/**`) stay out of scope.
 
 **Owed before this branch is claimed for POSIX:** the Linux confirmation pass — `npm run typecheck`,
