@@ -115,11 +115,17 @@ On Windows, symlink creation requires Developer Mode or elevation. Otherwise it 
 
 **In scope (this batch):** T1, T3, T4, T10.
 
-**Deferred to a later batch (recorded, not forgotten):** T2 (`deps.ts` native detection), T5
-(`session.ts` without `bash`), T6 (template scripts — several duplicate existing CLI commands
-and should be **deleted**, not ported), T7 (template tools `execute_script.ts`, `wiki-link.ts`,
-`wiki-search.ts`), T8 (template `opencode.json` MCP commands), T9 (`rapso-init.sh` → CLI
-subcommand), T11 (real Windows verification).
+**Second batch — promoted by the Windows verification (2026-09-19):** T2 (`deps.ts` native
+detection) plus the `context.ts` interpreter spawn it depends on. T2 was deferred in the first
+batch; real Windows execution promoted it to blocking, because `rapso install` reports Engram and
+Graphify as missing on a machine where both are installed, and `init` recommends `rapso install`
+as its next step — so a Windows user hits it on their first command. T11 (real Windows
+verification) is done.
+
+**Deferred to a later batch (recorded, not forgotten):** T5 (`session.ts` without `bash`), T6
+(template scripts — several duplicate existing CLI commands and should be **deleted**, not ported),
+T7 (template tools `execute_script.ts`, `wiki-link.ts`, `wiki-search.ts`), T8 (template
+`opencode.json` MCP commands), T9 (`rapso-init.sh` → CLI subcommand).
 
 **Out of scope entirely:** `.githooks/**` (verified not shipped in `cli/src/template/`),
 repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-only surfaces.
@@ -158,9 +164,11 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 | ID | Task | Files | Status |
 |----|------|-------|--------|
 | T1 | Process-launch utility that resolves `.cmd`/`.bat` on win32, plus wiring every site in the T1 table | `cli/src/utils/exec.ts` (new) + 8 call sites | [x] |
-| T3 | Normalize separators at the comparison sites, without changing stored values | `template.ts`, `manifest.ts`, `adopt.ts`, `defect.ts` | [ ] |
-| T4 | Symlink with a copy fallback when the platform refuses; `join()` instead of `+ '/' +` | `worktree.ts` | [ ] |
-| T10 | Reject Windows-reserved names and trailing dots/spaces | `init.ts` | [ ] |
+| T3 | Normalize separators at the comparison sites, without changing stored values | `template.ts`, `manifest.ts`, `adopt.ts`, `defect.ts` | [x] |
+| T4 | Symlink with a copy fallback when the platform refuses; `join()` instead of `+ '/' +` | `worktree.ts` | [x] |
+| T10 | Reject Windows-reserved names and trailing dots/spaces | `init.ts` | [x] |
+| T2 | Delete the POSIX shell strings from dependency detection; resolve the executable instead | `deps.ts`, `utils/exec.ts` | [~] |
+| T2b | Resolve the Python interpreter instead of hardcoding `python3` for the Graphify MCP server | `context.ts` | [~] |
 
 ## Acceptance criteria
 
@@ -260,6 +268,63 @@ Verified directly, not from the writer's report:
 - **T4's fallback is plausible by inspection** (a `symlinkOrCopy` helper copying on `EACCES`/`EPERM`)
   but the privilege failure cannot be triggered here, so it is unverified.
 
+### Windows verification returned (2026-09-19) — T2 completed
+
+The branch was executed on real Windows (Win 11 Pro build 26200, Node 24.11.1, npm 11.6.2, git
+2.51.2.windows.1, Developer Mode **off**) from a path containing both spaces and parentheses.
+
+- **T1, T3, T4 and T10 passed.** No `EINVAL`; the manifest carried no `.rapsodia-code/` or `.git/`
+  entries; `CON`, `CON.txt`, `NUL` and `COM1` were refused and `okname` accepted; `LinkType` was
+  empty, proving the symlink fallback copied.
+- **T2 was promoted to blocking.** `rapso install` reported Engram and Graphify as missing on a
+  machine where both were installed. `deps.ts` ran `which engram 2>/dev/null || command -v engram
+  2>/dev/null` and `python3 -c "import graphify" 2>/dev/null` through `cmd.exe`. The `2>/dev/null`
+  alone is fatal: cmd.exe tries to write stderr to a path literally named `\dev\null`.
+- One premise in the verification report was wrong and is corrected here: **spaces and parentheses
+  were never the trigger** for the `npm` failure. Published 1.0.0 fails identically from a clean
+  path, because Node refuses to spawn `npm.cmd` without a shell. The spaced path is a post-fix
+  regression test, not a reproduction.
+
+**The shell strings were deleted, not ported.** `deps.ts` resolves instead of asking a shell:
+
+```
+run('node', ['--version'])               // was exec('node --version')
+commandAvailable('engram')               // was the which / command -v pair
+run(python, ['-c', 'import graphify'])   // was python3 -c "import graphify" 2>/dev/null
+```
+
+**A hole in the proposed fix was closed at the same time.** Replacing the Graphify probe with
+`commandAvailable('graphify')` — the shape the verification report suggested — would have made
+`checkDeps()` report Graphify as installed on a machine where the runtime path still cannot launch.
+They are not the same predicate:
+
+| Surface | Invocation | Needs |
+|---|---|---|
+| `worktree.ts:311` graph refresh | `graphify . --update` | the CLI on PATH |
+| `context.ts:141` MCP server | `python3 -m graphify.serve` | an importable Python module |
+
+Verified: `graphify --help` has **no `serve` subcommand**, so the MCP path cannot be collapsed into
+the CLI. And python.org's Windows installer writes `python.exe`, not `python3.exe` — the
+`python3.exe` alias comes from the Microsoft Store build. A CLI-only probe would therefore have
+converted a loud failure into a silent one, which is the class §5 of the verification report warns
+about.
+
+One resolver now serves both surfaces: `resolvePythonCommand()` in `utils/exec.ts` (win32:
+`python3` → `python` → `py`; POSIX: `python3`, deliberately unchanged so the POSIX path stays
+byte-identical). `context.ts` uses it, and warns plus falls back to the static snapshot when no
+interpreter exists instead of failing silently.
+
+**Verified locally:** `npm run typecheck` and `npm run build` pass. `rapso install` reports all
+three dependencies found. With an isolated PATH holding only `node`, it reports Node found and
+Engram/Graphify missing without crashing. The bundle inlines `cross-spawn` (12 references, zero
+`require("cross-spawn")`) and contains no `which engram`.
+
+**Reported, not fixed:** `cli/src/template/opencode.json:48` still hardcodes
+`["python3", "-m", "graphify.serve", ...]`. That is the copy a **generated project** receives, so
+it is the Windows-facing half of this same defect — and it is T8, still deferred. `checkDeps()` now
+honestly reports Graphify as installed on a Windows machine whose generated project still carries a
+broken MCP command.
+
 ### Reported, not fixed
 
 - **T4's copy fallback is not refreshed on a later provision.** The skills loop treats a real
@@ -280,8 +345,8 @@ re-run, never accepted.**
 
 ## Next step
 
-T1 cannot be called *supported on Windows* until it runs on Windows. Windows verification is the
-only remaining gate for T1, T4 and T10.
+**Windows verification is done, and this branch is now a Windows support claim** for T1, T3, T4
+and T10 (T11). One re-check remains: T2's own fix has not run on Windows.
 
 The branch is pushed: `odd/windows-native-support` at `2aa6202` on
 https://github.com/Stefan-migo/rapsodia-code. Note that this clone's `origin` still carries the
@@ -289,25 +354,31 @@ retired `Stefan-migo/Cortex.git` URL, which GitHub redirects to `rapsodia-code`;
 used the canonical URL explicitly rather than let a write depend on a redirect. The local remote URL
 has not been changed.
 
-**Windows verification procedure handed to the human.** Clone the branch into a path containing
-**spaces and parentheses**, then:
+**Re-verification required for T2.** Run the Windows battery on the release build, from a path with
+spaces and parentheses (still the post-fix cross-spawn quoting regression test). The two new
+surfaces are `rapso install` and the `context.ts` interpreter resolution.
 
-1. `npm install && npm run build` in `cli/`
-2. `node dist/index.js worktree create wintest` — launches `npm ci` through cross-spawn from that
-   path. This is the primary test of T1.
-3. `node dist/index.js init wprobe --no-git --yes`, then check the manifest for `.rapsodia-code/`
-   and `.git/` entries — T3.
-4. `node dist/index.js init` for `CON`, `CON.txt`, `NUL`, `COM1` — must be refused; `okname` must
-   pass. This is **only** verifiable on Windows — T10.
-5. `Get-Item <worktree>\.opencode\skills\rapso-persona | Select LinkType` — empty means it copied,
-   proving the T4 fallback.
+One risk is unverifiable here and worth a deliberate look: `resolveExecutable` tests each candidate
+with `accessSync(path, X_OK)`, and the Microsoft Store installs `python.exe`/`python3.exe` as App
+Execution Alias reparse points, which that call can refuse. If it does, `resolvePythonCommand()`
+reports a missing interpreter that `where python` can see. Report Node, git and Windows versions,
+Developer Mode state, and the exit code plus full output of each step.
 
-Spaces and parentheses are not decorative: they are the exact input the hand-rolled escaper got
-wrong. Report Node, git and Windows versions, Developer Mode state, and the exit code plus full
-output of each step.
+**Remaining scope, deferred and still open:** T5 (`session.ts` without `bash`), T6 (template
+scripts — delete the redundant ones rather than port), T7 (template tools), T8 (template
+`opencode.json` MCP commands — now the highest-value deferred item, see above), T9
+(`rapso-init.sh` to a CLI subcommand). Maintainer-only surfaces (`.githooks/**`, `scripts/**`)
+stay out of scope.
 
-**Remaining scope, deferred and still open:** T2 (`deps.ts` native detection), T5 (`session.ts`
-without `bash`), T6 (template scripts — delete the redundant ones rather than port), T7 (template
-tools), T8 (template `opencode.json` MCP commands), T9 (`rapso-init.sh` to a CLI subcommand),
-T11 (real Windows verification). Maintainer-only surfaces (`.githooks/**`, `scripts/**`) stay out
-of scope.
+**Surfaced by the Windows run, not yet actioned — none of these are in scope for T2:**
+
+- `installDependencies` discards the underlying cause in a bare `catch {}` (`worktree.ts:199`), so
+  an operator gets no way to diagnose a failure.
+- `adopt.ts:1` is the last module importing `execFileSync` from `child_process` rather than
+  `utils/exec`. It only calls `git`, which resolves as `git.exe`, so it works today.
+- The `ini@7.0.0` `EBADENGINE` warning traces to `.opencode/tools/package.json` declaring
+  `"@opencode-ai/plugin": "latest"` — an unpinned range that lets a fresh install resolve past the
+  committed lockfile. `cli/package-lock.json` contains no `ini` at all, so the `cli` engines range
+  is not the cause.
+- `worktree.ts:177` bases a new worktree on `origin/main` explicitly. That is intentional, not an
+  accident; the verification report asked for it to be confirmed.
