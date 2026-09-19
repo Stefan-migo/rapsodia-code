@@ -172,6 +172,8 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 | T5 | Reach the `engram` wiki export when `bash` is unavailable | `session.ts` | [x] |
 | T8 | Resolve the Python interpreter the generated project names for the Graphify MCP server | `template/opencode.json`, `template.ts` | [x] |
 | T8b | Carry `{PYTHON_COMMAND}` in the remaining template docs, skills and scripts | 7 template files | [x] |
+| T12 | Serialize the captured streams in the defect payload, and scrub a quoted path as a unit | `defect.ts` | [x] |
+| T13 | Route the last two `child_process` bypasses through `utils/exec` | `init.ts`, `adopt.ts` | [x] |
 
 ## Acceptance criteria
 
@@ -436,6 +438,52 @@ three dependencies found; `adopt --dry-run` still reports `Created (17)`. `npm r
 `npm run build` pass. POSIX is unchanged by construction, because the resolver returns `python3`
 there and the fallback does too — but the Linux confirmation pass is still owed, see below.
 
+### Fourth Windows pass (2026-09-19) — the defect payload, the scrub gap and the last two bypasses
+
+**T12 — the report dropped the one line that explains the failure.** `exec.ts` attaches `status`,
+`stdout` and `stderr` to the error it throws, and `formatDefectReport` serialized only `message`.
+Baseline measured on Windows, in a directory that is not a repository: `rapso worktree create
+shimprobe --yes` printed `"message": "Command failed: git"` and nothing else. The payload now carries
+`exitStatus`, `signal`, `stdout` and `stderr` — both streams scrubbed, capped at 4000 characters
+each, omitted when empty — and the same run reports `"exitStatus": 128` with
+`"stderr": "fatal: not a git repository (or any of the parent directories): .git\n"`.
+
+**Adding stderr surfaced a real gap in `scrub`, and it is closed.** git quotes a path that contains a
+space, and the flag-shaped `QUOTED_VALUE` pass only reaches a quoted value that follows a flag — so
+`fatal: not a git repository: 'C:\Users\El Mismisimo\...'` was split on whitespace, its head redacted
+as a whitespace-delimited absolute path and its tail left readable in a public issue body. The
+contract lists "absolute paths ... embedded in a quoted value" as something `scrub` must redact, so
+this was a violation of the written contract, not a request for a wider one. A `QUOTED_RUN` pass now
+redacts a quoted run as a unit, opening only at the start of a word so the apostrophe in `it's` cannot
+pair with the quote that opens a path after it. URLs and already-redacted values are skipped, because
+the token pass would otherwise append a second `<redacted>`.
+
+**Still outside the contract, deliberately.** A path with a space that git did *not* quote, and a
+`cwd`/`HOME` prefix that contains a space, still split and keep only their head redacted:
+`cannot change to C:\Users\El Mismisimo\x.txt` becomes `cannot change to <path> Mismisimo\x.txt`. The
+contract scopes path redaction to "a whitespace-delimited value" and embraces bounded false
+negatives, so this is recorded rather than fixed, and a `ponytail:` comment names the ceiling. `-p`
+is not redacted either: the contract names the credential words explicitly and `p` is not one.
+
+**T13 — the last two `child_process` bypasses.** `init.ts` passed shell strings to `execSync`
+(`git commit -m "Initial commit from Rapsodia template"` and four more) and `adopt.ts` imported
+`execFileSync` from `child_process` directly. Both now route through `utils/exec` with argument
+arrays, so acceptance criterion 1 holds: the only `child_process` imports left in `cli/src/**` are the
+two type-only ones in `utils/exec.ts` and `utils/mcp.ts`.
+
+The port had one trap. `execSync` folds stdout and stderr into `message`, so
+`msg.includes('nothing to commit')` worked; the utility keeps the streams on the error, where
+`message` is only `Command failed: git`. The check now searches both streams, and the branch was
+finally exercised rather than assumed: with `GIT_CONFIG_GLOBAL` pointing at a config whose
+`core.excludesFile` ignores everything, `git add -A` stages nothing, `git commit` exits 1, and `init`
+correctly answers "Git repository already initialized" instead of warning.
+
+**Battery, fourth pass.** `init gitinit` exits 0 and creates the initial commit under the
+`Rapsodia Template` author; `init nogit --no-git` exits 0 and writes no `.git`; the ignore-all run
+above exits 0; `adopt --dry-run` resolves `isDirty` inside a repository (no warning) and still reports
+"Could not determine whether the working tree is dirty" outside one; `npm run typecheck` and
+`npm run build` pass; `cross-spawn` stays bundled (12 references, zero `require("cross-spawn")`).
+
 ## Next step
 
 **Windows verification is done and this branch is a Windows support claim** for T1, T2, T2b, T3,
@@ -457,9 +505,17 @@ App Execution Alias reparse points — Node's `X_OK` behaves like `F_OK` on Wind
 failure came from the candidate order instead. See the second Windows pass above.
 
 **Remaining scope, deferred and still open:** T6 (template scripts — delete the redundant ones
-rather than port), T7 (template tools), T9 (`rapso-init.sh` to a CLI subcommand), then the two
-`child_process` bypasses (`init.ts:3`, `adopt.ts:1`) and the swallowed `stderr` in `defect.ts`. T5
-and T8 are closed. Maintainer-only surfaces (`.githooks/**`, `scripts/**`) stay out of scope.
+rather than port; needs an explicit human decision before anything is deleted), T7 (template tools
+`execute_script.ts`, `wiki-link.ts`, `wiki-search.ts`) and T9 (`rapso-init.sh` to a CLI subcommand).
+T2, T2b, T5, T8, T8b, T12 and T13 are closed. Maintainer-only surfaces (`.githooks/**`,
+`scripts/**`) stay out of scope.
+
+**Owed before this branch is claimed for POSIX:** the Linux confirmation pass — `npm run typecheck`,
+`npm run build` and the battery under `bash`, to confirm Linux and macOS are byte-identical to the
+base. The shared files changed across the four Windows passes are `utils/exec.ts`, `utils/defect.ts`,
+`engine/template.ts`, `engine/session.ts`, `engine/adopt.ts` and `commands/init.ts`; the template
+substitution is byte-identical by construction, because the resolver returns `python3` on POSIX and
+the fallback does too.
 
 **Surfaced by the Windows run, not yet actioned — none of these are in scope for T2:**
 
