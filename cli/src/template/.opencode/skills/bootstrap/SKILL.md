@@ -29,7 +29,7 @@ node --version
 
 ### 0.2 Check Optional Tools
 ```bash
-python3 -c "import graphify" 2>/dev/null && echo "graphify OK"
+{PYTHON_COMMAND} -c "import graphify" 2>/dev/null && echo "graphify OK"
 ```
 
 ### 0.3 Report
