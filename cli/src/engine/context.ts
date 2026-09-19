@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
-import { execFileSync } from '../utils/exec';
+import { execFileSync, resolvePythonCommand } from '../utils/exec';
 import { info, warn, step, success } from '../utils/logger';
 import { MCPClient } from '../utils/mcp';
 import { resolveGraphifyPaths, resolveProjectManifest } from './project';
@@ -137,8 +137,16 @@ async function fetchGraphifyContext(projectDir: string, projectName: string): Pr
     return fetchGraphifyContextStatic(projectDir);
   }
 
+  // `python3` is not guaranteed on Windows, and an unresolvable interpreter used to surface only
+  // as a silent fallback to the static snapshot. Resolve it, and say so when there is none.
+  const python = resolvePythonCommand();
+  if (!python) {
+    warn('Graphify needs a Python interpreter on PATH — using the static snapshot');
+    return fetchGraphifyContextStatic(projectDir);
+  }
+
   try {
-    const client = new MCPClient('python3', ['-m', 'graphify.serve', graphJson]);
+    const client = new MCPClient(python, ['-m', 'graphify.serve', graphJson]);
     const items: ContextItem[] = [];
     try {
       await client.initialize();

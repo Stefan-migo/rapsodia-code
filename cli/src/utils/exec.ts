@@ -42,6 +42,20 @@ export function commandAvailable(command: string): boolean {
   return resolveExecutable(command) !== null;
 }
 
+/**
+ * `python3` is not a name Windows guarantees: python.org installs `python.exe` only, and the
+ * `python3.exe` alias comes from the Microsoft Store build. Detection must not assume it.
+ *
+ * The POSIX list is deliberately left as the single pre-Windows candidate — this adds a Windows
+ * path, it does not widen POSIX.
+ */
+export function resolvePythonCommand(): string | null {
+  const candidates = process.platform === 'win32'
+    ? ['python3', 'python', 'py']
+    : ['python3'];
+  return candidates.find((candidate) => commandAvailable(candidate)) ?? null;
+}
+
 interface ExecFileSyncError extends Error {
   status: number | null;
   stdout: string | Buffer;
