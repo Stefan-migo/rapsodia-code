@@ -171,6 +171,7 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 | T2b | Resolve the Python interpreter instead of hardcoding `python3` for the Graphify MCP server | `context.ts` | [x] |
 | T5 | Reach the `engram` wiki export when `bash` is unavailable | `session.ts` | [x] |
 | T8 | Resolve the Python interpreter the generated project names for the Graphify MCP server | `template/opencode.json`, `template.ts` | [x] |
+| T8b | Carry `{PYTHON_COMMAND}` in the remaining template docs, skills and scripts | 7 template files | [x] |
 
 ## Acceptance criteria
 
@@ -409,6 +410,32 @@ exercises it has to run from a main worktree — this pass ran it from a main wo
 the branch. Worth knowing before following the "work only in `..\wt`" instruction literally, since
 the two instructions conflict.
 
+### Third Windows pass (2026-09-19) — the remaining template interpreter sites (T8b)
+
+The template carried seven more hardcoded `python3` literals, plus an eighth site the inventory had
+missed: `template/.opencode/skills/graphify/SKILL.md:60` named a bare `python`, which is wrong in the
+opposite direction — it does not resolve on a POSIX box that ships only `python3`. All eight sites now
+carry `{PYTHON_COMMAND}` through the T8 mechanism, with no new machinery:
+`.opencode/agents/rapso-developer.md` (two occurrences), `.opencode/skills/bootstrap/SKILL.md`,
+`.opencode/skills/graphify/SKILL.md`, `AGENTS.md`, `SYSTEM-MAP.md`, `USER-GUIDE.md` and
+`scripts/install-deps.sh` — the last of which is short-lived if T6 deletes the script.
+
+**The probe had to be memoized, and the count is why.** A function replacer runs once per match, and
+both `copyTemplate` and the manifest route through `substituteVariables`, so the eight occurrences
+asked for the interpreter sixteen times per `init`. Each probe spawns twice on this machine, because
+`python3` is tried first and fails: the Store App Execution Alias takes 0.339s to exit 49, against
+0.136s for the real `python`. `resolvePythonCommand` now caches its result for the process, so the
+cost is one probe instead of sixteen. `rapso init` measures 2.48s.
+
+**Verified by execution, from `C:\Users\El Mismisimo\rapso (x86) test\`.** `init pprobe1` exits 0 and
+all eight generated sites read `python`; no `{PYTHON_COMMAND}` survives anywhere in the project;
+`update --dry-run` answers "Template is already up to date" and the generated repository's
+`git status` is clean, so the manifest still matches the bytes that were written — the property T8's
+placement exists to protect, now holding for eight files instead of one; `install` still reports all
+three dependencies found; `adopt --dry-run` still reports `Created (17)`. `npm run typecheck` and
+`npm run build` pass. POSIX is unchanged by construction, because the resolver returns `python3`
+there and the fallback does too — but the Linux confirmation pass is still owed, see below.
+
 ## Next step
 
 **Windows verification is done and this branch is a Windows support claim** for T1, T2, T2b, T3,
@@ -429,11 +456,10 @@ each candidate with `accessSync(path, X_OK)`, but that call does **not** reject 
 App Execution Alias reparse points — Node's `X_OK` behaves like `F_OK` on Windows. The interpreter
 failure came from the candidate order instead. See the second Windows pass above.
 
-**Remaining scope, deferred and still open:** T5 (`session.ts` without `bash`), T6 (template
-scripts — delete the redundant ones rather than port), T7 (template tools), T8 (template
-`opencode.json` MCP commands — now the highest-value deferred item, see above), T9
-(`rapso-init.sh` to a CLI subcommand). Maintainer-only surfaces (`.githooks/**`, `scripts/**`)
-stay out of scope.
+**Remaining scope, deferred and still open:** T6 (template scripts — delete the redundant ones
+rather than port), T7 (template tools), T9 (`rapso-init.sh` to a CLI subcommand), then the two
+`child_process` bypasses (`init.ts:3`, `adopt.ts:1`) and the swallowed `stderr` in `defect.ts`. T5
+and T8 are closed. Maintainer-only surfaces (`.githooks/**`, `scripts/**`) stay out of scope.
 
 **Surfaced by the Windows run, not yet actioned — none of these are in scope for T2:**
 
