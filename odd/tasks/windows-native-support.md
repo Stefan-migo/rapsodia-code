@@ -167,8 +167,10 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 | T3 | Normalize separators at the comparison sites, without changing stored values | `template.ts`, `manifest.ts`, `adopt.ts`, `defect.ts` | [x] |
 | T4 | Symlink with a copy fallback when the platform refuses; `join()` instead of `+ '/' +` | `worktree.ts` | [x] |
 | T10 | Reject Windows-reserved names and trailing dots/spaces | `init.ts` | [x] |
-| T2 | Delete the POSIX shell strings from dependency detection; resolve the executable instead | `deps.ts`, `utils/exec.ts` | [~] |
-| T2b | Resolve the Python interpreter instead of hardcoding `python3` for the Graphify MCP server | `context.ts` | [~] |
+| T2 | Delete the POSIX shell strings from dependency detection; resolve the executable instead | `deps.ts`, `utils/exec.ts` | [x] |
+| T2b | Resolve the Python interpreter instead of hardcoding `python3` for the Graphify MCP server | `context.ts` | [x] |
+| T5 | Reach the `engram` wiki export when `bash` is unavailable | `session.ts` | [x] |
+| T8 | Resolve the Python interpreter the generated project names for the Graphify MCP server | `template/opencode.json`, `template.ts` | [x] |
 
 ## Acceptance criteria
 
@@ -319,11 +321,11 @@ three dependencies found. With an isolated PATH holding only `node`, it reports 
 Engram/Graphify missing without crashing. The bundle inlines `cross-spawn` (12 references, zero
 `require("cross-spawn")`) and contains no `which engram`.
 
-**Reported, not fixed:** `cli/src/template/opencode.json:48` still hardcodes
-`["python3", "-m", "graphify.serve", ...]`. That is the copy a **generated project** receives, so
-it is the Windows-facing half of this same defect — and it is T8, still deferred. `checkDeps()` now
-honestly reports Graphify as installed on a Windows machine whose generated project still carries a
-broken MCP command.
+**Fixed in the second Windows pass:** `cli/src/template/opencode.json:48` hardcoded
+`["python3", "-m", "graphify.serve", ...]`, the copy a **generated project** receives — the
+Windows-facing half of this same defect, then still deferred as T8. The template now carries
+`{PYTHON_COMMAND}` and the generator resolves it, so `checkDeps()` and the generated project agree.
+See the second Windows pass above.
 
 ### Reported, not fixed
 
@@ -343,10 +345,74 @@ the delegated writers and returned `PASSED` on direct re-run, including one wher
 stated "Found no coding-standard violations". **A writer's self-reported gga verdict must be
 re-run, never accepted.**
 
+### Second Windows pass (2026-09-19) — T2, T2b, T5 and T8 completed
+
+Run on real Windows from `C:\Users\El Mismisimo\rapso (x86) test\` (spaces and parentheses), Node
+24.11.1, npm 11.6.2, git 2.51.2.windows.1, Developer Mode off, no `SeCreateSymbolicLinkPrivilege`,
+non-elevated. `npm run typecheck` and `npm run build` pass; `cross-spawn` stays bundled (12
+references, zero `require("cross-spawn")`) and `which engram` is absent from `dist/index.js`.
+
+**T2 did not pass on Windows, and the failure was the candidate ORDER, not the access check.** The
+risk recorded below was wrong: `accessSync(path, X_OK)` does **not** refuse the Store reparse point
+— measured `X_OK = OK` on `WindowsApps\python3.exe`, because Node's `X_OK` behaves like `F_OK` on
+Windows. The real cause is that `python3` is tried first and resolves to the Store App Execution
+Alias, which exists and resolves and then fails at launch with exit 49 ("Python was not found; run
+without arguments to install from the Microsoft Store"). python.org installs `python.exe` only, so
+on such a machine `python3` can never reach the real interpreter. `resolvePythonCommand()` now
+**runs** a candidate before selecting it. Verified: `rapso install` reports all three dependencies
+found, where the same tree reported `Graphify — not found` before the change.
+
+**T2b was the same defect on the MCP path.** `context.ts` shares the resolver, so the MCP spawn was
+equally dead — and the `!python` branch could never fire, because a resolved-but-dead alias is
+non-null. The `"Graphify needs a Python interpreter on PATH"` warning is now reachable only when no
+candidate runs at all.
+
+**T8's template half is fixed, and the design decision is recorded.** The generated `opencode.json`
+shipped `["python3", "-m", "graphify.serve", "graphify-out/graph.json"]` to every project — the
+copy a Windows user receives. Option taken (resolver-at-generation, chosen by the human over a CLI
+subcommand entrypoint and over a bare `python` literal): the template carries `{PYTHON_COMMAND}`
+and `substituteVariables` resolves it. **That placement is the point.** `copyTemplate` and
+`hashTemplateFile` both route through `substituteVariables`, so the manifest hash matches the bytes
+actually written and `rapspo update` does not report the resolved value as drift — the failure mode
+that made resolving after the copy unsafe. Verified: a fresh project writes `["python", ...]`, leaves
+no placeholder behind, and `rapso update --dry-run` answers "Template is already up to date". POSIX
+is byte-identical: the resolver returns `python3` there, and so does the fallback when nothing
+resolves. The replacement is a function replacer on purpose — it runs only on a match, so the
+interpreter probe costs one spawn instead of one per template file per loop.
+
+**T5 is fixed and executed, not inferred.** The `engram obsidian-export` fallback was gated on the
+script's existence, so a Windows box that carries the template script but no `bash` fell through to
+the catch and degraded to a warning. The gate now also requires `commandAvailable('bash')`.
+Verified by running `rapso close` with `PATH` reduced to node and engram alone — no `bash` visible
+to node, WSL's `System32\bash.exe` included — and the export completed through the `engram` path.
+With the normal PATH the script path is still taken, so the POSIX behaviour is unchanged.
+
+**Battery, second pass.** `install` reports all three found; `init wprobe` and `init okname` exit 0;
+the manifest carries no `.rapsodia-code/` or `.git/` entries; `CON`, `CON.txt`, `NUL` and `COM1` are
+each refused with exit 1; `adopt --dry-run` on an empty directory reports `Created (17)`;
+`worktree create wintest --yes` returns `created: true` and its `rapso-persona` skill has an empty
+`LinkType` (`Attributes: Directory`), i.e. the copy fallback ran; `start --no-open` exits 0 and
+writes the prelude.
+
+**The pre-commit hook is not installed in a fresh clone.** `core.hooksPath` is unset and
+`.git/hooks/` holds only `.sample` files, so the Atomicity Gate, the main-worktree guard and
+`gga run` do not execute. Nothing in the repository wires it — `scripts/gga-pre-commit.sh` is a
+separate legacy checker, not an installer. The main-worktree guard is therefore a convention in
+practice, not the hard block it is documented as. Commits made during this pass landed without the
+gate; they were verified by `typecheck`, `build` and live Windows execution instead. Wiring it is a
+human decision: `core.hooksPath` is repository-wide, so enabling it would also block every staged
+commit in the main worktree, not only code.
+
+**`worktree create` cannot run from a linked worktree.** It refuses with "Worktree creation must
+start from the main worktree" (`isMainWorktree` at `worktree.ts:172`), so the battery step that
+exercises it has to run from a main worktree — this pass ran it from a main worktree checked out on
+the branch. Worth knowing before following the "work only in `..\wt`" instruction literally, since
+the two instructions conflict.
+
 ## Next step
 
-**Windows verification is done, and this branch is now a Windows support claim** for T1, T3, T4
-and T10 (T11). One re-check remains: T2's own fix has not run on Windows.
+**Windows verification is done and this branch is a Windows support claim** for T1, T2, T2b, T3,
+T4, T5, T8 and T10 (T11).
 
 The branch is pushed: `odd/windows-native-support` at `2aa6202` on
 https://github.com/Stefan-migo/rapsodia-code. Note that this clone's `origin` still carries the
@@ -358,11 +424,10 @@ has not been changed.
 spaces and parentheses (still the post-fix cross-spawn quoting regression test). The two new
 surfaces are `rapso install` and the `context.ts` interpreter resolution.
 
-One risk is unverifiable here and worth a deliberate look: `resolveExecutable` tests each candidate
-with `accessSync(path, X_OK)`, and the Microsoft Store installs `python.exe`/`python3.exe` as App
-Execution Alias reparse points, which that call can refuse. If it does, `resolvePythonCommand()`
-reports a missing interpreter that `where python` can see. Report Node, git and Windows versions,
-Developer Mode state, and the exit code plus full output of each step.
+One risk was recorded here and has since been measured and **refuted**: `resolveExecutable` tests
+each candidate with `accessSync(path, X_OK)`, but that call does **not** reject the Microsoft Store
+App Execution Alias reparse points — Node's `X_OK` behaves like `F_OK` on Windows. The interpreter
+failure came from the candidate order instead. See the second Windows pass above.
 
 **Remaining scope, deferred and still open:** T5 (`session.ts` without `bash`), T6 (template
 scripts — delete the redundant ones rather than port), T7 (template tools), T8 (template
