@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
-import { execFileSync } from '../utils/exec';
+import { execFileSync, commandAvailable } from '../utils/exec';
 import { MCPClient } from '../utils/mcp';
 import { info, success, warn, step } from '../utils/logger';
 import { readProjectName, resolveGraphifyPaths } from './project';
@@ -106,8 +106,11 @@ export async function closeSession(
 
   step('Exporting to wiki');
   try {
+    // Gating on the file alone made the `engram` fallback below unreachable on Windows: the
+    // template ships the script, but a native Windows box has no `bash` to run it, so the whole
+    // export fell through to the catch and degraded to a warning.
     const scriptPath = join(projectDir, 'scripts', 'engram-export-wiki.sh');
-    if (existsSync(scriptPath)) {
+    if (existsSync(scriptPath) && commandAvailable('bash')) {
       execFileSync('bash', [scriptPath], {
         cwd: projectDir,
         stdio: 'pipe',
