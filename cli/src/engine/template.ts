@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSy
 import { join, relative, basename, extname } from 'path';
 import { createHash } from 'crypto';
 import { PROJECT_STATE_DIR_NAME } from '../utils/state';
+import { resolvePythonCommand } from '../utils/exec';
 
 export interface TemplateOptions {
   projectName: string;
@@ -30,12 +31,34 @@ function kebabCase(str: string): string {
     .toLowerCase();
 }
 
+/**
+ * The interpreter a generated project names for the Graphify MCP server. opencode launches that
+ * command itself, so a hardcoded name cannot be right on both platforms: `python3` is a Microsoft
+ * Store App Execution Alias on Windows and is not guaranteed to be a working interpreter there.
+ *
+ * Falling back to `python3` keeps the POSIX output byte-identical when nothing resolves.
+ */
+function pythonCommand(): string {
+  return resolvePythonCommand() ?? (process.platform === 'win32' ? 'python' : 'python3');
+}
+
+/**
+ * Resolving the interpreter here, rather than after the copy, is what keeps the manifest honest.
+ * `copyTemplate` and `hashTemplateFile` both route through this function, so the hash recorded for
+ * the generated file is the hash of the bytes that were actually written; resolving it anywhere
+ * else would make every project report `opencode.json` as modified forever.
+ *
+ * The replacement is a function on purpose: a function replacer only runs on a match, so the
+ * interpreter probe happens for the one file that carries the placeholder instead of once per
+ * template file per loop.
+ */
 export function substituteVariables(content: string, options: TemplateOptions): string {
   return content
     .replace(/\{PROJECT_NAME\}/g, options.projectName)
     .replace(/\{PROJECT_NAME_KEBAB\}/g, kebabCase(options.projectName))
     .replace(/\{DATE\}/g, options.date)
-    .replace(/\{YEAR\}/g, options.year);
+    .replace(/\{YEAR\}/g, options.year)
+    .replace(/\{PYTHON_COMMAND\}/g, () => pythonCommand());
 }
 
 export function collectFiles(dir: string, baseDir: string): string[] {

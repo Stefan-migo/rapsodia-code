@@ -45,7 +45,7 @@
     },
     "graphify": {
       "type": "local",
-      "command": ["python3", "-m", "graphify.serve", "graphify-out/graph.json"],
+      "command": ["{PYTHON_COMMAND}", "-m", "graphify.serve", "graphify-out/graph.json"],
       "enabled": true,
       "_note": "Parietal lobe: codebase knowledge graph for structural understanding before editing."
     },
