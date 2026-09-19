@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFileSync } from '../utils/exec';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
