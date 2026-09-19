@@ -42,18 +42,36 @@ export function commandAvailable(command: string): boolean {
   return resolveExecutable(command) !== null;
 }
 
+/** Resolving a candidate is not proof it can run; this is what tells the two apart. */
+function executes(command: string): boolean {
+  try {
+    execFileSync(command, ['--version'], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * `python3` is not a name Windows guarantees: python.org installs `python.exe` only, and the
  * `python3.exe` alias comes from the Microsoft Store build. Detection must not assume it.
  *
+ * Resolution alone is not enough there either. The Store alias is a reparse point that exists and
+ * passes `accessSync(X_OK)`, so it resolves cleanly and then fails at launch: on a machine with
+ * python.org 3.14 installed, `python3` resolved to that alias and exited 49. A candidate therefore
+ * has to be run before it is used.
+ *
  * The POSIX list is deliberately left as the single pre-Windows candidate — this adds a Windows
- * path, it does not widen POSIX.
+ * path, it does not widen POSIX — and POSIX keeps the resolve-only predicate, unchanged.
  */
 export function resolvePythonCommand(): string | null {
   const candidates = process.platform === 'win32'
     ? ['python3', 'python', 'py']
     : ['python3'];
-  return candidates.find((candidate) => commandAvailable(candidate)) ?? null;
+  const usable = process.platform === 'win32'
+    ? (candidate: string) => commandAvailable(candidate) && executes(candidate)
+    : commandAvailable;
+  return candidates.find(usable) ?? null;
 }
 
 interface ExecFileSyncError extends Error {
