@@ -63,15 +63,22 @@ function executes(command: string): boolean {
  *
  * The POSIX list is deliberately left as the single pre-Windows candidate — this adds a Windows
  * path, it does not widen POSIX — and POSIX keeps the resolve-only predicate, unchanged.
+ *
+ * Memoized because the probe spawns, and `substituteVariables` asks once per placeholder
+ * occurrence, which the template now carries eight of.
  */
+let resolvedPython: string | null | undefined;
+
 export function resolvePythonCommand(): string | null {
+  if (resolvedPython !== undefined) return resolvedPython;
   const candidates = process.platform === 'win32'
     ? ['python3', 'python', 'py']
     : ['python3'];
   const usable = process.platform === 'win32'
     ? (candidate: string) => commandAvailable(candidate) && executes(candidate)
     : commandAvailable;
-  return candidates.find(usable) ?? null;
+  resolvedPython = candidates.find(usable) ?? null;
+  return resolvedPython;
 }
 
 interface ExecFileSyncError extends Error {
