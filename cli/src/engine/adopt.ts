@@ -2,7 +2,7 @@ import { execFileSync } from '../utils/exec';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
-import { Manifest, ManifestFile } from './manifest';
+import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
 import { migrateLegacyState, resolveStatePath, sessionsDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
 import { mergeGitignore, OPENCODE_GITIGNORE } from './gitignore';
 
@@ -130,7 +130,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
     try { oldManifest = JSON.parse(readFileSync(manifestReadPath, 'utf-8')) as Manifest; }
     catch { oldManifest = undefined; }
   }
-  const oldHashes = new Map((oldManifest?.files || []).map((file) => [file.path, file.hash]));
+  const oldHashes = new Map((oldManifest?.files || []).map((file) => [normalizeManifestPath(file.path), file.hash]));
 
   for (const file of collectFiles(templateDir, templateDir).filter(isOwned)) {
     const source = join(templateDir, file);

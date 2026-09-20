@@ -57,6 +57,11 @@ export function templateOptionsFromManifest(manifest: Manifest): TemplateOptions
   };
 }
 
+/** Manifests written before 1.0.1 stored OS separators; `/` is canonical in the manifest. */
+export function normalizeManifestPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
 export function detectChanges(
   projectDir: string,
   templateDir: string,

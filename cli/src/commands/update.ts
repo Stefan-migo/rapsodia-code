@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { step, info, success, warn, error, heading } from '../utils/logger';
 import { hashFile, collectFiles, projectTemplateFile } from '../engine/template';
-import { detectChanges, Manifest, templateOptionsFromManifest } from '../engine/manifest';
+import { detectChanges, Manifest, normalizeManifestPath, templateOptionsFromManifest } from '../engine/manifest';
 import * as readline from 'readline';
 import { resolveStatePath } from '../utils/state';
 
@@ -86,6 +86,10 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     error('Failed to read manifest.json');
     process.exit(1);
   }
+
+  // A manifest written by a pre-1.0.1 Windows CLI stored backslashes, which match nothing once
+  // normalized; repairing it here means the next manifest rewrite persists the canonical form.
+  manifest.files = manifest.files.map((f) => ({ ...f, path: normalizeManifestPath(f.path) }));
 
   const templateOptions = templateOptionsFromManifest(manifest);
 
