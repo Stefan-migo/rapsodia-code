@@ -118,7 +118,11 @@ Authorized — `cli/src/**` only:
 - `cli/src/engine/template.ts` — export the substitution projector
 - `cli/src/engine/manifest.ts` — options helper, path normalization, ignore-file exclusion, version
 - `cli/src/commands/update.ts` — substitute on write, preserve `createdAt`, normalize paths, version
-- `cli/src/commands/adopt.ts` — normalize paths on read, version
+- `cli/src/engine/adopt.ts` — normalize paths on read, version (corrected: the raw `oldHashes` map
+  and the `'1.0.0'` literal live in `engine/adopt.ts`, not `commands/adopt.ts`, which is a thin
+  wrapper with neither)
+- `cli/src/utils/version.ts` — the single `CLI_VERSION` constant
+- `cli/src/index.ts`, `cli/src/utils/mcp.ts` — fold their version literals into `CLI_VERSION`
 - `odd/tasks/update-integrity.md` — this document
 
 ## Out of scope (do NOT "helpfully" fix these)
@@ -193,3 +197,41 @@ Windows, which is exactly what the published tarball does.
   manifest), and `/` is canonical on every platform, but it must not be applied to `excludedPaths`
   patterns, which are glob-ish and already normalized at their own comparison site (`:58-62`).
 - `adopt.ts` is touched for D3/D4 only. Do not refactor it.
+
+## Verification — observed on Windows, not inferred
+
+Repository has no test harness, so the check is the scenario that found the defects, executed
+against the **built** branch CLI from PowerShell with the real machine+user `PATH`
+(`node E:\Proyectos\rapsodia-code-odd-update-integrity\cli\dist\index.js`).
+
+`npm run typecheck` → exit 0. `npm run build` → exit 0. Both re-run by hand on the final branch.
+
+| # | Scenario | Observed result |
+|---|---|---|
+| 1 | Legacy project created by **published `1.0.0`** on Windows, then `update --force` with the built branch | `✔ 30 file(s) updated`, exit 0 |
+| 2 | Placeholder leak after that update | `grep -rnE '\{(PROJECT_NAME\|DATE\|YEAR\|PYTHON_COMMAND)\}'` → **empty** (before the fix: `opencode.json:48` was `["{PYTHON_COMMAND}", …]`) |
+| 3 | Graphify MCP command after that update | `["python", "-m", "graphify.serve", "graphify-out/graph.json"]` — the interpreter that actually runs (before: `python3`, exit 9009 on this machine) |
+| 4 | Convergence: `update --check` immediately after | `ℹ Template version: 1.0.1` / `ℹ Files tracked: 39` / `✔ Template is up to date` — no pending auto-updates. Second identical run: identical output (idempotent) |
+| 5 | Legacy manifest repair | backslash paths `34 → 0`, duplicate paths `0`, file count stayed `39` (no duplication) |
+| 6 | `createdAt` preservation (D2b) | backdated to `2026-01-15`, ran `update --force` → still `2026-01-15`; `AGENTS.md:150` and `wiki/log.md:9` converged to that date and the next `--check` was up to date |
+| 7 | Fresh project from the built CLI | `ℹ Files tracked: 38`, `✔ Template is up to date`, **no** `removed from template` line — the 2 phantom removals are gone; `templateVersion: 1.0.1`; 0 ignore-file entries; 0 placeholders; `python` resolved |
+
+The one remaining `⚠ 1 file(s) removed from template` on the **legacy** project is honest, not
+phantom: `scripts/generate-retrospective.sh`, which v1.0.1 deleted from the template and which
+still exists in that project on disk. Confirmed by set difference, not by assumption.
+
+## Follow-ups found while implementing (NOT fixed, out of scope)
+
+1. `cli/src/commands/project.ts:72` parses the manifest and compares raw paths exactly as D3 did,
+   so `rapso status` can still misclassify a legacy backslash manifest.
+2. `update` never prunes entries reported as `deleted` from the manifest, so genuine removals
+   accumulate in the manifest forever.
+3. W4 stops **new** tracking of `.gitignore` / `.opencode/.gitignore`, but does not purge the two
+   entries already inside a manifest written before this fix; such a project keeps reporting 2
+   removals until those entries leave the manifest.
+4. A no-op `update` returns before the manifest rewrite, so W3 repairs the on-disk manifest on the
+   next **write**, not on every read.
+5. `.githooks/pre-commit` is not wired in a clone (`core.hooksPath` unset, `.git/hooks` holds only
+   `*.sample`). The Atomicity Gate and the `gga` block documented as "hard block" in `AGENTS.md`
+   therefore did not execute for these commits; the ≤5-file limit was honoured by hand and no
+   independent review ran.
