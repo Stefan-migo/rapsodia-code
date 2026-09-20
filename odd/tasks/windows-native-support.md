@@ -152,8 +152,11 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 - **`execFileSync` must keep Node's contract**, because 11 call sites depend on it: it throws on a
   non-zero status or a signal, and the thrown error carries `.status`, `.stdout`, `.stderr` and
   `.signal` (`cli/src/engine/deps.ts` reads those).
-- Behaviour on Linux and macOS must be **byte-identical to the base**. This change adds a Windows
-  path; it does not alter the POSIX path.
+- Behaviour on Linux and macOS must be **byte-identical to the base**, with one accepted exception
+  recorded in the sixth pass: `template/.opencode/skills/graphify/SKILL.md:60` spelled a bare `python`
+  at the base and now emits `python3` through `{PYTHON_COMMAND}`. The human accepted the delta
+  (2026-09-20) because `python` does not resolve on a POSIX box that ships only `python3`. This change
+  adds a Windows path; it does not otherwise alter the POSIX path.
 - Path comparisons must be normalized **without** changing what is stored. Stored metadata
   (manifest entries, `opencode.json.instructions`, prelude references) keeps POSIX separators —
   see the note at `odd/tasks/rename-rapsodia.md:183-186`, where exactly this mistake was caught
@@ -176,6 +179,7 @@ repository `scripts/**`, `cli/scripts/generate-retrospective.sh` — maintainer-
 | T13 | Route the last two `child_process` bypasses through `utils/exec` | `init.ts`, `adopt.ts` | [x] |
 | T6 | Delete the template scripts the CLI already provides | `template/scripts/generate-retrospective.sh` | [x] |
 | T7 | Template tools — **kept**: the CLI has no sandbox, wiki-search or wiki-link equivalent | `template/.opencode/tools/**` | [ ] kept |
+| T14 | Linux/POSIX confirmation pass: build, battery and byte-identity against `54ab8cb` | — (verification only) | [x] |
 
 ## Acceptance criteria
 
@@ -381,9 +385,11 @@ and `substituteVariables` resolves it. **That placement is the point.** `copyTem
 actually written and `rapspo update` does not report the resolved value as drift — the failure mode
 that made resolving after the copy unsafe. Verified: a fresh project writes `["python", ...]`, leaves
 no placeholder behind, and `rapso update --dry-run` answers "Template is already up to date". POSIX
-is byte-identical: the resolver returns `python3` there, and so does the fallback when nothing
-resolves. The replacement is a function replacer on purpose — it runs only on a match, so the
-interpreter probe costs one spawn instead of one per template file per loop.
+is byte-identical for the eight sites the base already spelled `python3`: the resolver returns
+`python3` there, and so does the fallback when nothing resolves. **Corrected in the sixth pass:** the
+ninth site, `graphify/SKILL.md:60`, was the one the base spelled `python`, so its POSIX output does
+change — one accepted delta. The replacement is a function replacer on purpose — it runs only on a
+match, so the interpreter probe costs one spawn instead of one per template file per loop.
 
 **T5 is fixed and executed, not inferred.** The `engram obsidian-export` fallback was gated on the
 script's existence, so a Windows box that carries the template script but no `bash` fell through to
@@ -529,6 +535,81 @@ repository root has it) and has no `rapso sync` subcommand to replace it — a d
 every generated project. And `rapso close --no-export` is cosmetic: `close.ts:83` calls `closeSession`
 unconditionally and `session.ts:107-130` always exports, so the flag only gates a console step.
 
+### Sixth pass (Linux confirmation, 2026-09-19) — the owed POSIX pass, and one accepted delta
+
+The Linux confirmation the fifth pass left owed ran at `38c31e7` on Linux (Node 22.22.2, npm 10.9.7,
+git 2.55.0). `npm ci`, `npm run typecheck` and `npm run build` all exit 0.
+
+| Command | Exit | Result |
+|---|---|---|
+| `rapso init probe1` | 0 | Copied 40 files, initial commit created |
+| `rapso init probe2 --no-git` | 0 | no `.git` written |
+| `rapso install` | 0 | Node, Engram, Graphify all found |
+| `rapso adopt --dry-run` (empty dir) | 0 | Created (17), Conflicting (0) |
+| `rapso update --check` | 0 | 40 tracked, "2 file(s) removed", up to date |
+| `rapso worktree create t --yes` | 1 | see below — pre-existing, not a regression |
+| `rapso start --no-open` | 0 | `prelude.md` written (1193 bytes) |
+| `rapso close --message "linux"` | 0 | wiki exported |
+| `rapso init CON CON.txt NUL COM1` | 0 | all four accepted on Linux |
+| `init` with `git add -A` staging nothing | 0 | "Git repository already initialized", no warning |
+
+**Byte-identity does not hold. Exactly one content delta.** `git worktree add /tmp/base 54ab8cb`,
+both builds generated the same project name on the same day, and `diff -r -x .git` reports three
+differences, all from one cause:
+
+- `.opencode/skills/graphify/SKILL.md:60` — base emits `python`, the branch emits `python3`.
+- `.rapsodia-code/manifest.json` — the recorded hash of that file, a consequence of the same delta.
+- `scripts/generate-retrospective.sh` — absent, exactly as the fifth pass declared.
+
+**The sentence "POSIX is byte-identical" (third pass) is wrong for that one site, and this doc already
+carried the evidence.** The third pass named it: "*an eighth site the inventory had missed ...
+`graphify/SKILL.md:60` named a bare `python`*". A site the base spelled `python` cannot emit `python3`
+and stay byte-identical. The claim held only for the **eight** occurrences the base already spelled
+`python3`; this ninth one necessarily changes.
+
+**Accepted by the human on 2026-09-20: the delta stays.** `python` does not resolve on a POSIX box
+that ships only `python3` — the exact defect the third pass recorded for this site. Reverting would
+preserve the invariant by keeping the template broken on Linux. The constraint is amended below; the
+criterion is now "byte-identical except this one accepted normalization", not "byte-identical".
+
+**Why POSIX emits `python3` — measured, and the recorded mechanism was not the reason.**
+`resolvePythonCommand()` does not return the resolved path. `candidates.find(usable)` returns the
+**element**, so it yields the candidate *name*:
+
+```
+resolveExecutable('python3')  ->  "/usr/bin/python3"
+resolvePythonCommand()        ->  "python3"
+```
+
+That is neither the doc's "the resolver returns `python3` there" nor a leak of the absolute path. The
+`?? 'python3'` fallback is unreachable on POSIX whenever the resolver runs, and a Windows run that
+resolves `python` emits `python` — so the memo added by the third pass is real but inert on POSIX as a
+consequence of `find`'s return value, not of the resolver "returning `python3`". A bundled esbuild
+probe against `src/utils/exec.ts` produced both lines above on this machine; a first hypothesis that
+POSIX would leak `/usr/bin/python3` into `opencode.json` was refuted by the same probe.
+
+**`worktree create` exits 1 in a fresh project, on both builds.** The generated project has no
+`origin`, and the command runs `git fetch origin main`. Measured against the base build at
+`/tmp/base`: identical failure, identical exit code. **Pre-existing, not a regression.** With a remote
+present it returns exit 0 and creates the worktree on `odd/t`. The fifth pass's note that it refuses
+from a linked worktree still holds; this is a second, independent precondition.
+
+**One diagnostics regression, recorded not fixed.** `exec.ts` throws
+`new Error('Command failed: ' + command)`, dropping argv: the same git failure reads
+`Command failed: git -C <cwd> fetch origin main` at the base and `Command failed: git` on the branch.
+The fourth pass deliberately added structured `exitStatus`/`stderr` to the payload, so the explaining
+line survives there — but a caller reading `error.message` alone loses the subcommand. Small, and the
+human's call.
+
+**Merge state.** The branch is 1 commit behind `origin/main` (`c650dc1`). `git merge-tree --write-tree
+HEAD origin/main` is clean — no conflicts — even though main's `c650dc1` touched four of the same
+template files (`AGENTS.md`, `.opencode/agents/rapso-developer.md`, `SYSTEM-MAP.md`, `USER-GUIDE.md`).
+Main added no new bare `python` literal, so placeholder coverage stays complete after the merge.
+
+**Correction to the earlier count.** The third pass recorded "eight sites"; the inventory is **nine
+occurrences across eight files** (`rapso-developer.md` carries two). The base spelled eight of them
+`python3` and one `python`.
+
 ## Next step
 
 **Windows verification is done and this branch is a Windows support claim** for T1, T2, T2b, T3,
@@ -555,12 +636,13 @@ pre-existing reporting defects recorded in the fifth pass (the phantom `.gitigno
 "kept, because the CLI does not cover those capabilities". Maintainer-only surfaces (`.githooks/**`,
 `scripts/**`) stay out of scope.
 
-**Owed before this branch is claimed for POSIX:** the Linux confirmation pass — `npm run typecheck`,
-`npm run build` and the battery under `bash`, to confirm Linux and macOS are byte-identical to the
-base. The shared files changed across the four Windows passes are `utils/exec.ts`, `utils/defect.ts`,
-`engine/template.ts`, `engine/session.ts`, `engine/adopt.ts` and `commands/init.ts`; the template
-substitution is byte-identical by construction, because the resolver returns `python3` on POSIX and
-the fallback does too.
+**POSIX confirmation pass: done (sixth pass).** `npm ci`, `npm run typecheck`, `npm run build` and the
+full battery ran on Linux at `38c31e7`, all green, and a generated project was diffed against the base
+build. The result is **not** byte-identical: exactly one file differs, by the accepted `python` →
+`python3` normalization recorded in the sixth pass. The claim above — "byte-identical by construction,
+because the resolver returns `python3` on POSIX" — named the wrong mechanism: the resolver returns the
+candidate *name*, which happens to be `python3`, and the base site that carried a bare `python` could
+therefore not match.
 
 **Surfaced by the Windows run, not yet actioned — none of these are in scope for T2:**
 
