@@ -26,7 +26,10 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
   const files: ManifestFile[] = filePaths.map((fp) => ({
     path: relative(targetDir, fp).replace(/\\/g, '/'),
     hash: hashFile(fp),
-  })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/'));
+  })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/')
+    // `init` writes the ignore files itself and npm never publishes a file named `.gitignore`,
+    // so tracking them can only ever report them as removed from the template.
+    && f.path !== '.gitignore' && f.path !== '.opencode/.gitignore');
 
   const manifest: Manifest = {
     templateVersion: '1.0.0',
