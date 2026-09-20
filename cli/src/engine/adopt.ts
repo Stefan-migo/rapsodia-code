@@ -2,8 +2,9 @@ import { execFileSync } from '../utils/exec';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
-import { Manifest, ManifestFile } from './manifest';
+import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
 import { migrateLegacyState, resolveStatePath, sessionsDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
+import { CLI_VERSION } from '../utils/version';
 import { mergeGitignore, OPENCODE_GITIGNORE } from './gitignore';
 
 export const OWNED_PATHS = [
@@ -130,7 +131,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
     try { oldManifest = JSON.parse(readFileSync(manifestReadPath, 'utf-8')) as Manifest; }
     catch { oldManifest = undefined; }
   }
-  const oldHashes = new Map((oldManifest?.files || []).map((file) => [file.path, file.hash]));
+  const oldHashes = new Map((oldManifest?.files || []).map((file) => [normalizeManifestPath(file.path), file.hash]));
 
   for (const file of collectFiles(templateDir, templateDir).filter(isOwned)) {
     const source = join(templateDir, file);
@@ -206,7 +207,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   }
   if (!options.dryRun) {
     const files: ManifestFile[] = collectFiles(templateDir, templateDir).filter(isOwned).map((file) => ({ path: file, hash: hashTemplateFile(join(templateDir, file), templateOptions) }));
-    writeFile(manifestWritePath, JSON.stringify({ templateVersion: '1.0.0', createdAt: getDate(), projectName, files, excludedPaths: NEVER_PATHS }, null, 2) + '\n');
+    writeFile(manifestWritePath, JSON.stringify({ templateVersion: CLI_VERSION, createdAt: getDate(), projectName, files, excludedPaths: NEVER_PATHS }, null, 2) + '\n');
   }
   if (oldManifest) plan.skipped.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));
   else plan.seeded.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));

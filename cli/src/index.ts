@@ -10,13 +10,14 @@ import { analyzeCommand } from './commands/analyze';
 import { worktreeCommand } from './commands/worktree';
 import { adoptCommand } from './commands/adopt';
 import { formatDefectReport, isExpected } from './utils/defect';
+import { CLI_VERSION } from './utils/version';
 
 const program = new Command();
 
 program
   .name('rapso')
   .description('Scaffold and manage project development workflows')
-  .version('1.0.1');
+  .version(CLI_VERSION);
 
 program
   .command('init')

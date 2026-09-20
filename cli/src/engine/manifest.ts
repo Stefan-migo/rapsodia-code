@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
 import { hashFile, hashDirectory, collectFiles, hashTemplateFile, TemplateOptions } from './template';
 import { stateDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
+import { CLI_VERSION } from '../utils/version';
 
 export interface ManifestFile {
   path: string;
@@ -26,10 +27,13 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
   const files: ManifestFile[] = filePaths.map((fp) => ({
     path: relative(targetDir, fp).replace(/\\/g, '/'),
     hash: hashFile(fp),
-  })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/'));
+  })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/')
+    // `init` writes the ignore files itself and npm never publishes a file named `.gitignore`,
+    // so tracking them can only ever report them as removed from the template.
+    && f.path !== '.gitignore' && f.path !== '.opencode/.gitignore');
 
   const manifest: Manifest = {
-    templateVersion: '1.0.0',
+    templateVersion: CLI_VERSION,
     createdAt: options.date,
     projectName: options.projectName,
     files,
@@ -42,6 +46,24 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
   );
 
   return manifest;
+}
+
+/**
+ * The substitution variables a project was created with. Both the classifier and the update writes
+ * must use this: deriving them twice is what lets classify and write drift apart.
+ */
+export function templateOptionsFromManifest(manifest: Manifest): TemplateOptions {
+  return {
+    projectName: manifest.projectName,
+    projectType: 'default',
+    date: manifest.createdAt,
+    year: (manifest.createdAt || '').slice(0, 4),
+  };
+}
+
+/** Manifests written before 1.0.1 stored OS separators; `/` is canonical in the manifest. */
+export function normalizeManifestPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
 }
 
 export function detectChanges(
@@ -78,12 +100,7 @@ export function detectChanges(
   // substituted form. Reconstruct the variables the project was created with so the
   // comparison is apples to apples; otherwise every placeholder-bearing file is reported
   // as modified on every run, and a freshly created project looks permanently stale.
-  const templateOptions: TemplateOptions = {
-    projectName: manifest.projectName,
-    projectType: 'default',
-    date: manifest.createdAt,
-    year: (manifest.createdAt || '').slice(0, 4),
-  };
+  const templateOptions = templateOptionsFromManifest(manifest);
 
   for (const file of templateFiles) {
     const templatePath = join(templateDir, file);

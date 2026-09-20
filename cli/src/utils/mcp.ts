@@ -2,6 +2,7 @@ import { ChildProcess } from 'child_process';
 import { spawn } from './exec';
 import { createInterface, Interface } from 'readline';
 import { warn } from './logger';
+import { CLI_VERSION } from './version';
 
 interface PendingRequest {
   resolve: (value: any) => void;
@@ -101,7 +102,7 @@ export class MCPClient {
           params: {
             protocolVersion: '2024-11-05',
             capabilities: {},
-            clientInfo: { name: 'rapso-cli', version: '1.0.1' },
+            clientInfo: { name: 'rapso-cli', version: CLI_VERSION },
           },
         }) + '\n');
       } catch (err) {
