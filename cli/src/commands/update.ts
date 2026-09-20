@@ -5,6 +5,7 @@ import { hashFile, collectFiles, projectTemplateFile } from '../engine/template'
 import { detectChanges, Manifest, normalizeManifestPath, templateOptionsFromManifest } from '../engine/manifest';
 import * as readline from 'readline';
 import { resolveStatePath } from '../utils/state';
+import { CLI_VERSION } from '../utils/version';
 
 interface UpdateOptions {
   dryRun?: boolean;
@@ -247,7 +248,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
 
   const updatedManifest: Manifest = {
     ...manifest,
-    templateVersion: '1.0.0',
+    templateVersion: CLI_VERSION,
     createdAt: manifest.createdAt,
     files: updatedFiles,
   };

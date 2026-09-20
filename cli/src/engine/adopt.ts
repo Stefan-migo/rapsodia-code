@@ -4,6 +4,7 @@ import { basename, dirname, join, relative, resolve } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
 import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
 import { migrateLegacyState, resolveStatePath, sessionsDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
+import { CLI_VERSION } from '../utils/version';
 import { mergeGitignore, OPENCODE_GITIGNORE } from './gitignore';
 
 export const OWNED_PATHS = [
@@ -206,7 +207,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   }
   if (!options.dryRun) {
     const files: ManifestFile[] = collectFiles(templateDir, templateDir).filter(isOwned).map((file) => ({ path: file, hash: hashTemplateFile(join(templateDir, file), templateOptions) }));
-    writeFile(manifestWritePath, JSON.stringify({ templateVersion: '1.0.0', createdAt: getDate(), projectName, files, excludedPaths: NEVER_PATHS }, null, 2) + '\n');
+    writeFile(manifestWritePath, JSON.stringify({ templateVersion: CLI_VERSION, createdAt: getDate(), projectName, files, excludedPaths: NEVER_PATHS }, null, 2) + '\n');
   }
   if (oldManifest) plan.skipped.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));
   else plan.seeded.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));

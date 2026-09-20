@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
 import { hashFile, hashDirectory, collectFiles, hashTemplateFile, TemplateOptions } from './template';
 import { stateDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
+import { CLI_VERSION } from '../utils/version';
 
 export interface ManifestFile {
   path: string;
@@ -32,7 +33,7 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
     && f.path !== '.gitignore' && f.path !== '.opencode/.gitignore');
 
   const manifest: Manifest = {
-    templateVersion: '1.0.0',
+    templateVersion: CLI_VERSION,
     createdAt: options.date,
     projectName: options.projectName,
     files,
