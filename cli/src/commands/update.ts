@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { step, info, success, warn, error, heading } from '../utils/logger';
-import { hashFile, collectFiles } from '../engine/template';
-import { detectChanges, Manifest } from '../engine/manifest';
+import { hashFile, collectFiles, projectTemplateFile } from '../engine/template';
+import { detectChanges, Manifest, templateOptionsFromManifest } from '../engine/manifest';
 import * as readline from 'readline';
 import { resolveStatePath } from '../utils/state';
 
@@ -87,6 +87,8 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
+  const templateOptions = templateOptionsFromManifest(manifest);
+
   step('Comparing template with project');
   const changes = detectChanges(projectDir, TEMPLATE_DIR, manifest);
 
@@ -167,8 +169,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     const templatePath = join(TEMPLATE_DIR, file);
     const projectPath = join(projectDir, file);
     try {
-      const content = readFileSync(templatePath);
-      writeFileSync(projectPath, content);
+      writeFileSync(projectPath, projectTemplateFile(templatePath, templateOptions));
       result.updated.push(file);
       success(`Updated: ${file}`);
     } catch (e: any) {
@@ -183,8 +184,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
       const templatePath = join(TEMPLATE_DIR, file);
       const projectPath = join(projectDir, file);
       try {
-        const content = readFileSync(templatePath);
-        writeFileSync(projectPath, content);
+        writeFileSync(projectPath, projectTemplateFile(templatePath, templateOptions));
         result.updated.push(file);
         success(`Overwritten: ${file}`);
       } catch (e: any) {
@@ -208,8 +208,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
           const { mkdirSync } = require('fs');
           mkdirSync(parentDir, { recursive: true });
         }
-        const content = readFileSync(templatePath);
-        writeFileSync(projectPath, content);
+        writeFileSync(projectPath, projectTemplateFile(templatePath, templateOptions));
         result.added.push(file);
         success(`Added: ${file}`);
       } catch (e: any) {
@@ -245,7 +244,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   const updatedManifest: Manifest = {
     ...manifest,
     templateVersion: '1.0.0',
-    createdAt: new Date().toISOString().split('T')[0],
+    createdAt: manifest.createdAt,
     files: updatedFiles,
   };
 

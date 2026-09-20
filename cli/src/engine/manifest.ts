@@ -44,6 +44,19 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
   return manifest;
 }
 
+/**
+ * The substitution variables a project was created with. Both the classifier and the update writes
+ * must use this: deriving them twice is what lets classify and write drift apart.
+ */
+export function templateOptionsFromManifest(manifest: Manifest): TemplateOptions {
+  return {
+    projectName: manifest.projectName,
+    projectType: 'default',
+    date: manifest.createdAt,
+    year: (manifest.createdAt || '').slice(0, 4),
+  };
+}
+
 export function detectChanges(
   projectDir: string,
   templateDir: string,
@@ -78,12 +91,7 @@ export function detectChanges(
   // substituted form. Reconstruct the variables the project was created with so the
   // comparison is apples to apples; otherwise every placeholder-bearing file is reported
   // as modified on every run, and a freshly created project looks permanently stale.
-  const templateOptions: TemplateOptions = {
-    projectName: manifest.projectName,
-    projectType: 'default',
-    date: manifest.createdAt,
-    year: (manifest.createdAt || '').slice(0, 4),
-  };
+  const templateOptions = templateOptionsFromManifest(manifest);
 
   for (const file of templateFiles) {
     const templatePath = join(templateDir, file);

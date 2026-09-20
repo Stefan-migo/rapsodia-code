@@ -42,16 +42,6 @@ function pythonCommand(): string {
   return resolvePythonCommand() ?? (process.platform === 'win32' ? 'python' : 'python3');
 }
 
-/**
- * Resolving the interpreter here, rather than after the copy, is what keeps the manifest honest.
- * `copyTemplate` and `hashTemplateFile` both route through this function, so the hash recorded for
- * the generated file is the hash of the bytes that were actually written; resolving it anywhere
- * else would make every project report `opencode.json` as modified forever.
- *
- * The replacement is a function on purpose: a function replacer only runs on a match, so the
- * interpreter probe happens for the one file that carries the placeholder instead of once per
- * template file per loop.
- */
 export function substituteVariables(content: string, options: TemplateOptions): string {
   return content
     .replace(/\{PROJECT_NAME\}/g, options.projectName)
@@ -59,6 +49,20 @@ export function substituteVariables(content: string, options: TemplateOptions): 
     .replace(/\{DATE\}/g, options.date)
     .replace(/\{YEAR\}/g, options.year)
     .replace(/\{PYTHON_COMMAND\}/g, () => pythonCommand());
+}
+
+/**
+ * The one place the text/binary rule lives. `copyTemplate`, `hashTemplateFile` and `update` all
+ * project through it, so the hash recorded for a generated file is the hash of the bytes that were
+ * actually written; resolving the substitution anywhere else would make every project report
+ * `opencode.json` as modified forever.
+ *
+ * `substituteVariables` resolves the interpreter lazily, per match, so the probe runs for the one
+ * file that carries the placeholder instead of once per template file per loop.
+ */
+export function projectTemplateFile(filePath: string, options: TemplateOptions): string | Buffer {
+  if (!isTextFile(filePath)) return readFileSync(filePath);
+  return substituteVariables(readFileSync(filePath, 'utf-8'), options);
 }
 
 export function collectFiles(dir: string, baseDir: string): string[] {
@@ -87,13 +91,7 @@ export function copyTemplate(targetDir: string, options: TemplateOptions): strin
 
     mkdirSync(targetParent, { recursive: true });
 
-    if (isTextFile(sourcePath)) {
-      let content = readFileSync(sourcePath, 'utf-8');
-      content = substituteVariables(content, options);
-      writeFileSync(targetPath, content, 'utf-8');
-    } else {
-      writeFileSync(targetPath, readFileSync(sourcePath));
-    }
+    writeFileSync(targetPath, projectTemplateFile(sourcePath, options));
 
     copiedFiles.push(file);
   }
@@ -107,14 +105,12 @@ export function hashFile(filePath: string): string {
 }
 
 /**
- * Hash a template file the way it will exist in the project: text files are hashed after
- * variable substitution, binary files byte-for-byte. A manifest records the hash of the
- * project file, so comparing it against the raw template hash would report every file that
- * carries a placeholder as modified forever. Mirrors copyTemplate's text/binary rule.
+ * Hash a template file the way it will exist in the project. A manifest records the hash of the
+ * project file, so comparing it against the raw template hash would report every file that carries
+ * a placeholder as modified forever.
  */
 export function hashTemplateFile(filePath: string, options: TemplateOptions): string {
-  if (!isTextFile(filePath)) return hashFile(filePath);
-  return createHash('sha256').update(substituteVariables(readFileSync(filePath, 'utf-8'), options)).digest('hex');
+  return createHash('sha256').update(projectTemplateFile(filePath, options)).digest('hex');
 }
 
 export function hashDirectory(dir: string): string[] {
