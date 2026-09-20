@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from '../utils/exec';
 import { copyTemplate, TemplateOptions } from '../engine/template';
 import { writeProjectIgnores } from '../engine/gitignore';
 import { generateManifest } from '../engine/manifest';
@@ -17,6 +17,10 @@ interface InitOptions {
 
 function validateProjectName(name: string): string | null {
   if (!name || name.length === 0) return 'Project name cannot be empty';
+  if (process.platform === 'win32' && /[. ]$/.test(name)) return 'Project name cannot end with a dot or space on Windows';
+  if (process.platform === 'win32' && /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(name)) {
+    return 'Project name is reserved on Windows because it names a device';
+  }
   if (/[\s]/.test(name)) return 'Project name cannot contain spaces';
   if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) return 'Project name contains invalid characters';
   if (name === '.' || name === '..') return 'Project name cannot be . or ..';
@@ -74,27 +78,31 @@ export async function initCommand(name: string, options: InitOptions): Promise<v
 
   step('Initializing git repository');
   if (options.git !== false) {
+    // One utility owns process launching, and it never builds a shell command line — the shell
+    // strings passed here reintroduced the unescaped-argument class the branch exists to close.
+    const git = (...args: string[]): string => execFileSync('git', args, { cwd: targetDir, encoding: 'utf-8', stdio: 'pipe' });
     try {
-      execSync('git init', { cwd: targetDir, stdio: 'pipe' });
+      git('init');
       try {
-        execSync('git config user.email rapsodia@template.local', { cwd: targetDir, stdio: 'pipe' });
-        execSync('git config user.name "Rapsodia Template"', { cwd: targetDir, stdio: 'pipe' });
+        git('config', 'user.email', 'rapsodia@template.local');
+        git('config', 'user.name', 'Rapsodia Template');
       } catch {
         // user config might already be set globally, that's fine
       }
-      execSync('git add -A', { cwd: targetDir, stdio: 'pipe' });
-      execSync('git commit -m "Initial commit from Rapsodia template"', {
-        cwd: targetDir,
-        stdio: 'pipe',
-      });
+      git('add', '-A');
+      git('commit', '-m', 'Initial commit from Rapsodia template');
       success('Git repository initialized with initial commit');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      // The utility keeps the captured streams on the error, where `execSync` folded them into
+      // `message`; both are searched, and stderr is what the operator needs to see.
+      const failure = e as { message?: string; stdout?: unknown; stderr?: unknown };
+      const text = (value: unknown): string => typeof value === 'string' ? value : '';
+      const stderr = text(failure.stderr);
       // "nothing to commit" is harmless — only warn on real failures
-      if (msg.includes('nothing to commit')) {
+      if (`${failure.message ?? ''}\n${text(failure.stdout)}\n${stderr}`.includes('nothing to commit')) {
         success('Git repository already initialized');
       } else {
-        warn(`Git init skipped: ${msg}`);
+        warn(`Git init skipped: ${stderr.trim() || failure.message || String(e)}`);
       }
     }
   } else {

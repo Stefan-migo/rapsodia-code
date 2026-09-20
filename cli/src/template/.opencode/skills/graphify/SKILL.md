@@ -57,7 +57,7 @@ Interactive visualization. Open in browser to explore communities, click nodes f
 ## MCP Integration
 If graphify MCP server is running (via opencode.json config), agents can query the graph directly:
 ```
-python -m graphify.serve graphify-out/graph.json
+{PYTHON_COMMAND} -m graphify.serve graphify-out/graph.json
 ```
 
 ## Workflow Integration

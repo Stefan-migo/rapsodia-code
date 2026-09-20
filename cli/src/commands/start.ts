@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn } from '../utils/exec';
 import { info, success, warn, error, heading } from '../utils/logger';
 import { generateSessionId, openSession, getSessionInfo } from '../engine/session';
 import { buildPrelude } from '../engine/context';

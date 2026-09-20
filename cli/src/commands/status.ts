@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { execFileSync } from 'child_process';
+import { execFileSync } from '../utils/exec';
 import { heading } from '../utils/logger';
 import { findProjectRoot, readProjectName, resolveGraphifyPaths, resolveProjectManifest } from '../engine/project';
 import { resolveStatePath } from '../utils/state';

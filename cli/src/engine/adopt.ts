@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFileSync } from '../utils/exec';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
@@ -32,8 +32,10 @@ export interface AdoptPlan { created: string[]; refreshed: string[]; removed: st
 interface AdoptOptions { dryRun?: boolean; yes?: boolean; force?: boolean; }
 
 function matches(path: string, pattern: string): boolean {
-  if (pattern.endsWith('/**')) return path === pattern.slice(0, -3) || path.startsWith(pattern.slice(0, -2));
-  return path === pattern;
+  const normalizedPath = path.replace(/\\/g, '/');
+  const normalizedPattern = pattern.replace(/\\/g, '/');
+  if (normalizedPattern.endsWith('/**')) return normalizedPath === normalizedPattern.slice(0, -3) || normalizedPath.startsWith(normalizedPattern.slice(0, -2));
+  return normalizedPath === normalizedPattern;
 }
 
 function isOwned(path: string): boolean { return OWNED_PATHS.some((pattern) => matches(path, pattern)); }

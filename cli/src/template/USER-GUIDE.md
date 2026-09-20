@@ -74,7 +74,7 @@ Gentle AI SDD remains available when explicitly requested:
 ### Graphify (Code Understanding — Parietal Lobe)
 | Command | When |
 |---------|------|
-| `python3 -m graphify.serve graphify-out/graph.json` | Start MCP server |
+| `{PYTHON_COMMAND} -m graphify.serve graphify-out/graph.json` | Start MCP server |
 | `query_graph` | Before editing any code |
 | `god_nodes` | Find key concepts |
 | `/graphify . --update` | After major refactors |

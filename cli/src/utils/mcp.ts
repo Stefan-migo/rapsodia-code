@@ -1,4 +1,5 @@
-import { spawn, ChildProcess } from 'child_process';
+import { ChildProcess } from 'child_process';
+import { spawn } from './exec';
 import { createInterface, Interface } from 'readline';
 import { warn } from './logger';
 

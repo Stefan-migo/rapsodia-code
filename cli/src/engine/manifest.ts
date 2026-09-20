@@ -24,7 +24,7 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
 
   const filePaths = hashDirectory(targetDir);
   const files: ManifestFile[] = filePaths.map((fp) => ({
-    path: relative(targetDir, fp),
+    path: relative(targetDir, fp).replace(/\\/g, '/'),
     hash: hashFile(fp),
   })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/'));
 
@@ -54,7 +54,13 @@ export function detectChanges(
     ? ['AGENTS.md', '.gitignore', 'opencode.json', '.opencode/opencode.json', '.opencode/templates/**']
     : [];
   const ignoredPaths = [...excludedPaths, ...adoptedMergedPaths];
-  const templateFiles = collectFiles(templateDir, templateDir).filter((file) => !ignoredPaths.some((pattern) => pattern.endsWith('/**') ? file.startsWith(pattern.slice(0, -2)) : file === pattern));
+  const templateFiles = collectFiles(templateDir, templateDir).filter((file) => !ignoredPaths.some((pattern) => {
+    const normalizedFile = file.replace(/\\/g, '/');
+    const normalizedPattern = pattern.replace(/\\/g, '/');
+    return normalizedPattern.endsWith('/**')
+      ? normalizedFile === normalizedPattern.slice(0, -3) || normalizedFile.startsWith(normalizedPattern.slice(0, -2))
+      : normalizedFile === normalizedPattern;
+  }));
 
   const added: string[] = [];
   const modified: string[] = [];

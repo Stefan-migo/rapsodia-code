@@ -18,10 +18,10 @@ ODD is the default workflow: execute the ODD task doc from the Planner. When the
 
 ### 2. Code Understanding (Graphify — Parietal Lobe)
 **BEFORE editing any file, run the parietal check:**
-1. Query Graphify for relevant nodes: `query_graph` or `python3 -m graphify.serve graphify-out/graph.json`
+1. Query Graphify for relevant nodes: `query_graph` or `{PYTHON_COMMAND} -m graphify.serve graphify-out/graph.json`
 2. Read GRAPH_REPORT.md for god nodes and community structure
 3. Understand what depends on what before making changes
-4. If graph is stale, run: `python3 -m graphify . --update`
+4. If graph is stale, run: `{PYTHON_COMMAND} -m graphify . --update`
 
 ### 3. Execution Discipline (5-Step Gate)
 **You MUST follow these steps for EVERY task, in order:**

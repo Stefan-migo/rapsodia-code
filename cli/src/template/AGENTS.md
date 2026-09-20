@@ -38,7 +38,7 @@ Switch with Tab: Planner (read-only) / Developer (full tools).
 |------|---------|
 | `query_graph` | Query knowledge graph for relevant nodes |
 | `god_nodes` | Find highest-degree concepts |
-| `python3 -m graphify.serve <graph>` | MCP server for graph queries |
+| `{PYTHON_COMMAND} -m graphify.serve <graph>` | MCP server for graph queries |
 | `/graphify . --update` | Rebuild graph after code changes |
 
 ### Gentle AI SDD (Frontal Lobe — Planning)

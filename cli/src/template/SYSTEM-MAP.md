@@ -75,7 +75,7 @@ How every component of the Rapsodia 2.5 executive system works, when to use it, 
 
 | Command | When |
 |---------|------|
-| `python3 -m graphify.serve graphify-out/graph.json` | Start graph MCP server |
+| `{PYTHON_COMMAND} -m graphify.serve graphify-out/graph.json` | Start graph MCP server |
 | `query_graph` | Query for relevant nodes before editing |
 | `god_nodes` | Find highest-degree concepts |
 | `/graphify . --update` | Rebuild graph after code changes |

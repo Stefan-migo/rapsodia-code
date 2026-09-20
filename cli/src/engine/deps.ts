@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { commandAvailable, execFileSync, resolvePythonCommand } from '../utils/exec';
 
 export interface DepStatus {
   name: string;
@@ -7,20 +7,29 @@ export interface DepStatus {
   required: boolean;
 }
 
-function exec(command: string): { stdout: string; exitCode: number } {
+interface CommandResult {
+  stdout: string;
+  exitCode: number;
+}
+
+function run(command: string, args: string[]): CommandResult {
   try {
-    const stdout = execSync(command, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    return { stdout: stdout.trim(), exitCode: 0 };
+    const stdout = execFileSync(command, args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    return { stdout: String(stdout).trim(), exitCode: 0 };
   } catch (e: unknown) {
-    const err = e as { status?: number; stdout?: string; stderr?: string };
-    return { stdout: err.stdout || err.stderr || '', exitCode: err.status ?? 1 };
+    const err = e as { status?: number; stdout?: string | Buffer; stderr?: string | Buffer };
+    const output = err.stdout || err.stderr || '';
+    return {
+      stdout: (typeof output === 'string' ? output : output.toString()).trim(),
+      exitCode: err.status ?? 1,
+    };
   }
 }
 
 export function checkDeps(): DepStatus[] {
   const results: DepStatus[] = [];
 
-  const node = exec('node --version');
+  const node = run('node', ['--version']);
   results.push({
     name: 'Node.js',
     installed: node.exitCode === 0,
@@ -35,18 +44,22 @@ export function checkDeps(): DepStatus[] {
     }
   }
 
-  const engram = exec('which engram 2>/dev/null || command -v engram 2>/dev/null');
+  // Resolving on PATH replaces `which`/`command -v`, which do not exist in cmd.exe.
+  const engramInstalled = commandAvailable('engram');
   results.push({
     name: 'Engram',
-    installed: engram.exitCode === 0,
-    version: engram.exitCode === 0 ? 'found' : undefined,
+    installed: engramInstalled,
+    version: engramInstalled ? 'found' : undefined,
     required: true,
   });
 
-  const graphify = exec('python3 -c "import graphify" 2>/dev/null');
+  // Graphify's MCP server is a Python module, so detection has to prove that a real interpreter
+  // can import it — not assume the interpreter is named `python3`, which Windows does not guarantee.
+  const python = resolvePythonCommand();
+  const graphifyInstalled = python ? run(python, ['-c', 'import graphify']).exitCode === 0 : false;
   results.push({
     name: 'Graphify',
-    installed: graphify.exitCode === 0,
+    installed: graphifyInstalled,
     required: true,
   });
 

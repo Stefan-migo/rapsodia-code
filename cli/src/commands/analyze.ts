@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from '../utils/exec';
 import { info, success, warn, error, heading } from '../utils/logger';
 import { findProjectRoot, readProjectName } from '../engine/project';
 
@@ -75,7 +75,7 @@ export async function analyzeCommand(options: AnalyzeOptions): Promise<void> {
 
   let engramOutput = '';
   try {
-    engramOutput = execSync(`engram context "${projectName}"`, {
+    engramOutput = execFileSync('engram', ['context', projectName], {
       encoding: 'utf-8',
       timeout: 10000,
       stdio: ['pipe', 'pipe', 'pipe'],
