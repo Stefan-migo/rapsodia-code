@@ -9,8 +9,8 @@ import { mergeGitignore, OPENCODE_GITIGNORE } from './gitignore';
 
 export const OWNED_PATHS = [
   '.opencode/agents/**', '.opencode/tools/**',
-  '.opencode/skills/**', '.opencode/mcp-template.json', '.opencode/package.json',
-  '.opencode/package-lock.json',
+  '.opencode/skills/**', '.opencode/plugins/**', '.opencode/mcp-template.json',
+  '.opencode/package.json', '.opencode/package-lock.json',
 ];
 
 export const NEVER_PATHS = ['DESIGN.md', 'SYSTEM-MAP.md', 'USER-GUIDE.md', 'wiki/**', 'scripts/**'];
@@ -96,14 +96,26 @@ function mergeJson(content: string, targetDir: string, templateDir: string, reti
   // an empty array would drop whatever it holds. Only ever seed or extend an array.
   if (Array.isArray(current.plugin)) {
     const pluginIdentity = resolve(targetDir, plugin);
+    const installed = existsSync(join(targetDir, plugin));
+    const pluginSuffix = `/${plugin}`;
     let found = false;
     current.plugin = current.plugin.filter((entry) => {
-      if (typeof entry !== 'string' || resolve(targetDir, entry) !== pluginIdentity) return true;
+      if (typeof entry !== 'string') return true;
+      const resolved = resolve(targetDir, entry);
+      if (resolved !== pluginIdentity) {
+        // An older adopt wrote this entry as an absolute path into whichever checkout installed
+        // it — a retired `~/.cortex` clone, or a sibling project. It names our plugin but
+        // resolves outside this project, so it loads code from a tree the project does not own
+        // and can never converge onto its own copy. It is dropped only once this project's copy
+        // exists, for the same reason a retired agent entry is kept while its replacement is
+        // missing: a config entry must never outlive, or precede, the file behind it.
+        return !installed || !entry.replace(/\\/g, '/').endsWith(pluginSuffix);
+      }
       if (found) return false;
       found = true;
       return true;
     });
-    if (!found && existsSync(join(targetDir, plugin))) current.plugin.push(plugin);
+    if (!found && installed) current.plugin.push(plugin);
   } else if (current.plugin === undefined && existsSync(join(targetDir, plugin))) current.plugin = [plugin];
   const output = JSON.stringify(current, null, 2) + '\n';
   return { content: output, changed: JSON.stringify(current) !== before, removed };
