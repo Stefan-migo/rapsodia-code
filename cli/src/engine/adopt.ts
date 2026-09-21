@@ -8,7 +8,7 @@ import { CLI_VERSION } from '../utils/version';
 import { mergeGitignore, OPENCODE_GITIGNORE } from './gitignore';
 
 export const OWNED_PATHS = [
-  '.opencode/agents/**', '.opencode/tools/**',
+  '.opencode/agents/**', '.opencode/commands/**', '.opencode/tools/**',
   '.opencode/skills/**', '.opencode/plugins/**', '.opencode/mcp-template.json',
   '.opencode/package.json', '.opencode/package-lock.json',
 ];
