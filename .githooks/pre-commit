@@ -10,17 +10,29 @@ if [ "$CHANGED_FILES" -gt 5 ]; then
   exit 1
 fi
 
-# === Step 1b: Main worktree code guard ===
+# === Step 1b: Main worktree guard ===
 # ACDMR, not ACMR: a staged DELETION of tracked code must be rejected too.
 # With ACMR a deletion lists no paths, the loop below never iterates, and the
 # commit passes — the guard silently allowed removing code from main.
+#
+# The line drawn below is product vs. local regenerable state, not code vs. non-code. A
+# code-only reading refuses the output of the product's own close flow: `rapso close`
+# writes its Engram snapshot into `wiki/` (see engine/session.ts), those files are tracked,
+# and the old single-pattern allowlist rejected them in the main worktree.
+#
+# Two properties worth knowing before trusting this as more than it is. The check is
+# directory-based, not branch-based: it compares --git-dir against --git-common-dir, which
+# are equal only in the main worktree, so a feature branch created inside the main
+# directory does not evade it and a linked worktree is not subject to it at all. And it is
+# a local convenience, not an integrity gate — `main` carries no branch protection, no CI
+# runs on it, and `--no-verify` bypasses this file entirely.
 GIT_DIR=$(git rev-parse --git-dir)
 COMMON_DIR=$(git rev-parse --git-common-dir)
 if [ "$GIT_DIR" = "$COMMON_DIR" ] && ! git diff --cached --quiet; then
   while IFS= read -r path; do
     case "$path" in
-      .rapsodia-code/sessions/*) ;;
-      *) echo "Main worktree guard: direct code commits are only allowed for .rapsodia-code/sessions/**"; exit 1 ;;
+      .rapsodia-code/*|wiki/*|.atl/*) ;;
+      *) echo "Main worktree guard: direct commits are only allowed for local regenerable state (.rapsodia-code/**, wiki/**, .atl/**)"; exit 1 ;;
     esac
   done < <(git diff --cached --name-only --diff-filter=ACDMR)
 fi
