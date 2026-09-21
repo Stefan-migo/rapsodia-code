@@ -65,7 +65,7 @@ function injectSections(content: string, sections: Array<[string, string]>): { c
   return { content: `${content.replace(/\s*$/, '')}\n\n${suffix}\n`, changed: true };
 }
 
-function mergeJson(content: string, targetDir: string, templateDir: string, retireAgents: string[]): { content: string; changed: boolean; removed: string[] } {
+function mergeJson(content: string, targetDir: string, templateDir: string, retireAgents: string[], created: string[]): { content: string; changed: boolean; removed: string[] } {
   const current = JSON.parse(content || '{}') as Record<string, any>;
   const template = JSON.parse(readFileSync(join(templateDir, 'opencode.json'), 'utf-8')) as Record<string, any>;
   const before = JSON.stringify(current);
@@ -96,7 +96,9 @@ function mergeJson(content: string, targetDir: string, templateDir: string, reti
   // an empty array would drop whatever it holds. Only ever seed or extend an array.
   if (Array.isArray(current.plugin)) {
     const pluginIdentity = resolve(targetDir, plugin);
-    const installed = existsSync(join(targetDir, plugin));
+    // A dry run writes nothing, so the file's absence would otherwise hide the swap from the
+    // plan. `created` reports it the same way the retired-agent check below already reads it.
+    const installed = existsSync(join(targetDir, plugin)) || created.includes(plugin);
     const pluginSuffix = `/${plugin}`;
     let found = false;
     current.plugin = current.plugin.filter((entry) => {
@@ -193,7 +195,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   const merges: Array<[string, { content: string; changed: boolean; removed?: string[] }]> = [];
   merges.push([agentsPath, injectSections(existsSync(agentsPath) ? readFileSync(agentsPath, 'utf-8') : '', markdownSections(templateDir, templateOptions))]);
   merges.push([ignorePath, mergeGitignore(existsSync(ignorePath) ? readFileSync(ignorePath, 'utf-8') : '')]);
-  for (const path of configs) merges.push([path, mergeJson(existsSync(path) ? readFileSync(path, 'utf-8') : '', targetDir, templateDir, retireAgents)]);
+  for (const path of configs) merges.push([path, mergeJson(existsSync(path) ? readFileSync(path, 'utf-8') : '', targetDir, templateDir, retireAgents, plan.created)]);
   for (const [path, result] of merges) {
     const label = relative(targetDir, path);
     for (const name of result.removed ?? []) plan.removed.push(`${label} → ${name}`);

@@ -144,7 +144,57 @@ Out of scope here; recorded so the plan difference is not later mistaken for a r
 tracked (`git ls-files`), not ignored (`git check-ignore` exits 1) and present in the published
 package — so adding `.opencode/plugins/**` to `OWNED_PATHS` does reach consumers.
 
+### Review round 1 — the `gga` gate caught a divergence
+
+The first commit (`193b77d`) carried a defect the pre-commit `gga` review named before it landed:
+the `installed` gate read only `existsSync`, so a **dry run** — which writes nothing — never took
+the drop branch, while the real run did. The plan and the real run disagreed about the plugin
+entry. The reviewer pointed at the pattern this file already uses for the retired-agent check, 77
+lines below the offending line: `existsSync(...) || plan.created.includes(...)`.
+
+Fixed in a follow-up commit: `mergeJson` now accepts `created` and computes
+
+```ts
+const installed = existsSync(join(targetDir, plugin)) || created.includes(plugin);
+```
+
+so both modes evaluate the same branch.
+
+### Re-verification after the fix
+
+A second fixture carried a foreign absolute entry **plus** project-owned entries plus a non-string:
+
+```json
+"plugin": ["C:/Users/El Mismisimo/.cortex/.opencode/plugins/graphify.js", "some-project-plugin.js", 42]
+```
+
+A real `adopt --yes` produced:
+
+```json
+"plugin": ["some-project-plugin.js", 42, ".opencode/plugins/graphify.js"]
+```
+
+The foreign entry was dropped, both project-owned entries survived, ours was appended. A second
+`adopt --dry-run` over the now-converged project reported `Created (0)` with
+`.opencode\opencode.json` under `Skipped` — the dry run agreeing with the real run, which is exactly
+the divergence the review flagged.
+
+Both fixtures were deleted afterwards.
+
+## Follow-ups found, NOT fixed (out of scope)
+
+1. **`cli/src/engine/adopt.ts:93` injects `{PYTHON_COMMAND}` literally.** `template.mcp[name]` is
+   copied verbatim, but the template `opencode.json` is read without `substituteVariables`, so an
+   adopted project receives `"command": ["{PYTHON_COMMAND}", "-m", "graphify.serve", ...]` as
+   literal text. Observed directly in the fixture output. `OpttiusV2` is unaffected today only
+   because its `mcp.graphify` entry already exists and is therefore skipped. Pre-existing, surfaced
+   by the same review, deliberately not fixed here to keep this change to one concern.
+2. **`cli/src/template/.opencode/tools/node_modules/.gitkeep` ships in the npm package but is not
+   tracked in git**, so plan output differs between a repo checkout and the published package.
+3. **`adopt` still does not remove retired skills** (`cortex-persona`, `cortex-session`,
+   `ponytail-plan`).
+
 ## Next step
 
-Record Evidence, commit the work unit on `odd/adopt-plugin-ownership`, then decide whether to cut
-the release that carries the fix before adopting `OpttiusV2`.
+Commit the review fix, then decide whether to cut the release that carries this change before
+adopting `OpttiusV2`.
