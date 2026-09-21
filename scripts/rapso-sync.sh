@@ -103,7 +103,9 @@ repair_agents() {
   local -a rewrites=(
     's|cortex-persona|rapso-persona|g'
     's|cortex-session|rapso-session|g'
-    's|cortex-init|rapso-init|g'
+    # `cortex-init` is deliberately absent. Its rename target, `/rapso-init`, has been retired:
+    # rewriting a legacy token onto a path that no longer exists moves a dead reference without
+    # giving the reader a live one, so the retired spelling is left exactly as found.
     's|cortex-sync|rapso-sync|g'
     's|cortex worktree|rapso worktree|g'
     's|cortex close|rapso close|g'

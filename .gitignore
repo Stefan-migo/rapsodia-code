@@ -13,8 +13,7 @@ node_modules/
 /.opencode/node_modules/
 /.opencode/tools/node_modules/
 
-# rapso-init.sh install artifacts (generated per project)
-/rapso-init.sh.bak-*
+# locally installed pack artifacts (generated per project)
 /.opencode/commands/
 /.opencode/skills/rapso-*
 /.opencode/skills/ponytail-*
