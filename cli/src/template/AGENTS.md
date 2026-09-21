@@ -99,6 +99,7 @@ Optional: sequential-thinking, context7, github — enable in `opencode.json` as
 ## Skills
 | Skill | When to load |
 |-------|-------------|
+| `skill({name:"bootstrap"})` | Specializing this template for the project — interview, research, agent team. Reached with `/new-project` |
 | `skill({name:"graphify"})` | Before any code editing |
 | `skill({name:"design-system"})` | When building UI |
 
