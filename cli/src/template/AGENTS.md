@@ -65,7 +65,7 @@ scored Engram context, the Graphify report, and the project manifest summary. Re
 
 ### Execution (Code Sandbox)
 
-`codemode` is the Pi code-execution surface. It replaces the retired OpenCode `execute_script` tool.
+`codemode` is the Pi code-execution surface for multi-step logic.
 
 ## Skills
 
