@@ -3,24 +3,43 @@
 ## Brain Lobe Architecture
 
 ```
-Frontal Lobe (Planning)     → rapso-session + ODD — odd/tasks/<feature>.md
+Frontal Lobe (Planning)     → ODD — odd/tasks/<feature>.md
 Parietal Lobe (Spatial)     → Graphify — codebase graph before editing
-Hippocampus (Memory)        → Engram — persistent SQLite memory via MCP
+Hippocampus (Memory)        → Engram — persistent SQLite memory
 Occipital Lobe (Archive)    → wiki/ — Obsidian-readable snapshot exported from Engram
 ```
 
-## Two Identities
+## Runtime — Pi / Gentle Shell
 
-| Agent | Role | Permissions |
-|-------|------|-------------|
-| `@Rapso-Planner` | Human interaction, spec drafting, research, knowledge management | Read-only + webfetch + task |
-| `@Rapso-Developer` | Technical execution, code writing, testing, quality gates | Full (edit, bash, write, task) |
+This project runs on Pi through Gentle Shell. `gentle-ai` is the orchestrator and `gentle-engram`
+provides memory. There are no primary planner or developer agents: substantial work is delegated to
+bounded subagents, and one parent session owns the plan, the task document, and the result.
 
-Switch with Tab: Planner (read-only) / Developer (full tools).
+Where things live:
 
-## Tool-Belt (MCP + CLI + Custom Tools)
+| Resource | Location |
+|---|---|
+| This workflow contract | `AGENTS.md` — Pi reads it natively |
+| Project skills | `.agents/skills/` |
+| User skills | `~/.agents/skills/` (`graphify` lives here) |
+| User MCP servers | `~/.gentle-shell/agent/mcp.json` (Engram is already declared) |
+| Optional project MCP servers | `.pi/mcp.json` — read only after project trust is granted |
+| Local ignored state | `.rapsodia-code/` (manifest, config, sessions, prelude) |
+
+## Session Context
+
+Pi owns the session lifecycle; `gentle-engram` opens the session, saves summaries, and captures
+discoveries. Do not launch an agent through `rapso`, and do not treat `rapso start` as the session
+owner.
+
+If `.rapsodia-code/prelude.md` exists when a session starts, read it before the first task: it holds
+scored Engram context, the Graphify report, and the project manifest summary. Refresh it with
+`rapso start --no-open` when it is stale.
+
+## Tool-Belt
 
 ### Engram (Hippocampus — Memory)
+
 | Tool | Purpose |
 |------|---------|
 | `mem_save` | Save structured observation (decision, architecture, bugfix, pattern, discovery, learning) |
@@ -34,99 +53,68 @@ Switch with Tab: Planner (read-only) / Developer (full tools).
 | `mem_stats` | Memory system statistics |
 
 ### Graphify (Parietal Lobe — Code Understanding)
+
 | Tool | Purpose |
 |------|---------|
-| `query_graph` | Query knowledge graph for relevant nodes |
-| `god_nodes` | Find highest-degree concepts |
-| `{PYTHON_COMMAND} -m graphify.serve <graph>` | MCP server for graph queries |
-| `/graphify . --update` | Rebuild graph after code changes |
+| `graphify query "<question>"` | Query the knowledge graph for relevant nodes |
+| `graphify path "<A>" "<B>"` | Shortest path between two concepts |
+| `graphify explain "<concept>"` | Plain-language explanation of a node and its neighbors |
+| `graphify . --update` | Refresh the graph after code changes (AST-only, no API cost) |
+| `graphify-out/GRAPH_REPORT.md` | God nodes and community structure |
+| `{PYTHON_COMMAND} -m graphify.serve --graph graphify-out/graph.json` | Optional MCP server, declared in `.pi/mcp.json` |
 
-### Gentle AI SDD (Frontal Lobe — Planning)
+### Execution (Code Sandbox)
 
-These commands remain available when explicitly requested; ODD is the default continuation.
-
-| Command | Purpose |
-|---------|---------|
-| `rapso-session` skill | Discuss and structure planning work with the user |
-| `/sdd-new` | Start a new structured change |
-| `/sdd-ff` | Fast-forward a change through its planning phases |
-| `/sdd-status` | Check change state and available next steps |
-| `/sdd-apply` | Implement the change tasks |
-| `/sdd-verify` | Run diagnostics against the implementation and artifacts |
-| `/sdd-archive` | Close and preserve a completed change |
-| `/sdd-init` | Initialize SDD context for a project |
-| `/sdd-onboard` | Walk through the SDD workflow on an existing project |
-
-### Code-Sandbox (Execution)
-| Tool | Purpose |
-|------|---------|
-| `execute_script` | Run TypeScript/JavaScript in Node.js sandbox for multi-step logic |
-
-## Session Flow
-
-### Start (CLI handles this)
-1. `rapso start` → creates session, pre-loads context from Engram + Graphify, launches OpenCode
-2. Agent detects `.rapsodia-code/prelude.md` and uses it as working context
-
-### Work
-1. Planner closes planning with an ODD handoff (`rapso-session`). After explicit per-feature human consent, create the implementation worktree **first** (`rapso worktree create <slug>`, from `origin/main`); the ODD task doc `odd/tasks/<feature>.md` is created **inside** that worktree and committed on branch `odd/<slug>`, reaching main through the PR
-2. Planner hands the ODD handoff to Developer via `@Rapso-Developer`
-3. Developer runs graphify check before editing code
-4. Developer executes modified 5-Step Gate per task
-
-### 5-Step Execution Gate (MANDATORY)
-```
-Step 1: GRAPH CHECK — query_graph before editing
-Step 2: ATOMIC COMMIT — one concern per commit, ≤5 files
-Step 3: VERIFY — the checks this project actually configures (typecheck, build, tests); never claim a check that does not exist
-Step 4: SPEC CHECK — only when SDD was explicitly used (/sdd-verify is optional diagnostics under ODD)
-Step 5: FINALIZE — mem_save + rapso close --message "<summary>"
-```
-
-### End (Agent handles finalization)
-1. `@Rapso-Developer` calls mem_save for all discoveries
-2. `@Rapso-Developer` runs: bash("rapso close --message "<summary>"")
-   → This calls mem_session_summary + wiki export + cleanup
-
-## Active MCP Servers
-| Server | Purpose | Status |
-|--------|---------|--------|
-| Engram | Persistent memory (19 tools) | Enabled |
-| Graphify | Codebase knowledge graph | Enabled |
-
-Optional: sequential-thinking, context7, github — enable in `opencode.json` as needed.
+`codemode` is the Pi code-execution surface. It replaces the retired OpenCode `execute_script` tool.
 
 ## Skills
+
 | Skill | When to load |
 |-------|-------------|
-| `skill({name:"bootstrap"})` | Specializing this template for the project — interview, research, agent team. Reached with `/new-project` |
-| `skill({name:"graphify"})` | Before any code editing |
-| `skill({name:"design-system"})` | When building UI |
+| `.agents/skills/rapso-session` | Planning sessions: architecture, requirements, estimates, pre-ODD discussion |
+| `.agents/skills/design-system` | When building or reviewing UI |
+| `graphify` (user-level) | Before structural code work |
+
+## ODD — Default Workflow
+
+ODD is the only workflow in this project. Spec-Driven Development was retired: there is no
+`openspec/`, no `/sdd-*` command, and no SDD spec check. The ODD task document is the specification.
+
+### 5-Step Execution Gate (MANDATORY)
+
+```
+Step 1: GRAPH CHECK — read graphify-out/GRAPH_REPORT.md, then graphify query/path before editing
+Step 2: ATOMIC COMMIT — one concern per commit, ≤5 files
+Step 3: VERIFY — the checks this project actually configures; never claim a check that does not exist
+Step 4: REVIEW SLICE — keep work units around 400 authored lines; a high-risk item gets its own commit
+Step 5: FINALIZE — mem_save the discoveries
+```
+
+`rapso close` still exports the wiki snapshot and the retrospective, and during the migration it also
+ends the Engram session. Do not pair it with another `mem_session_end` on the same work.
 
 ## Knowledge Capture Discipline
-Save to Engram immediately when you encounter:
-- **decision**: Architecture or design decisions with rationale
-- **bugfix**: Root cause and fix for bugs
-- **pattern**: Reusable patterns discovered
-- **architecture**: System architecture insights
-- **discovery**: Unexpected findings
-- **learning**: Lessons learned during development
+
+Save to Engram immediately when you encounter a decision, bugfix, pattern, architecture insight,
+discovery, or learning. Use this content format:
+
+```
+**What**: what was done (one line)
+**Why**: what motivated it (bug, request, performance)
+**Where**: files or paths affected
+**Learned**: gotchas, edge cases, surprises
+```
+
+At the end of a session that will be handed off, write a `mem_session_summary` with Goal,
+Instructions, Discoveries, Accomplished, Next Steps, and Relevant Files.
 
 ## Coding Standards
+
 - Run the project's configured checks (typecheck, build, tests) before considering work complete
 - Follow existing project conventions
 - Atomic commits: one concern per commit, descriptive messages
 - Add tests when the project has a test harness; never claim coverage that does not exist
 - NEVER commit secrets or credentials
-
-## Ponytail — Post-Write Simplification Check
-
-Ponytail operates on code that already exists and asks whether the same behavior can be expressed more simply. It never decides whether a feature should exist, which dependency gets added, which pattern is used, or how the system is structured.
-
-- Never remove, reduce, or alter behavior the task authorized. Report it as a finding instead; the human decides.
-- When deletion and addition both work and the authorized behavior stays identical, delete.
-- If the simpler form requires changing the design, dependencies, or structure, that is a finding for the human, not an edit.
-- Apply these rules during implementation only; they are not an approval checkbox, a receipt, a line-count target, or a replacement for RDD/native review.
 
 ## ODD Worktrees
 
@@ -147,5 +135,16 @@ and the smallest reproduction you have.
   refusals, for this project's own bugs, or for environment and dependency failures.
 - If you cannot tell whether the cause is Rapsodia, say that instead of filing.
 
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+
 ## Project
+
 This is the **{PROJECT_NAME}** project, created on {DATE}.
