@@ -2,7 +2,8 @@
 
 Feature branch `odd/pi-migration`. Worktree `../rapsodia-code-odd-pi-migration`.
 Proposal and evidence: `docs/pi-migration.md` (read it before any task).
-P1, P2, and P3 are delivered on this branch. P4..P5 remain, tracked in `docs/pi-migration.md` §6.
+P1, P2, and P3 are delivered on this branch. P4 is in progress. P5 remains, tracked in
+`docs/pi-migration.md` §6.
 
 ## Specs
 
@@ -15,6 +16,7 @@ P1, P2, and P3 are delivered on this branch. P4..P5 remain, tracked in `docs/pi-
 - **S7 — Session ownership.** "aqui creo que seria interesante que la sesion se carge cuando abro gentle shell. actualmente no utilizao el cli de rapsodia code para iniciar. simplemente abro opencode y rapsodiacode esta considerado en el flujo. me gustaria que fuera mas o menos lo mismo pero con gentle shell". `rapso` must not launch an agent. Prelude loads on session start.
 - **S8 — P1 is the current milestone.** "ok vamos con P1". P1 is repository dogfood only: no `cli/src` changes.
 - **S9 — P1 execution decisions.** Worktree: "Sí, con rapso worktree create pi-migration". `openspec/`: "Empaquetar en tar y borrar" — archive to `docs/archive/openspec-2026-10.tar.gz`, then remove the directory.
+- **S10 — P4 mechanism.** Selected options: "B — extensión de proyecto (la shippea el template)" for loading the prelude, and "Sí, agregar `rapso context`" for the command. The extension ships in `.pi/extensions/`, refreshes the prelude in the background on `session_start`, and calls `rapso context`; project trust is required before Pi loads it, so the `AGENTS.md` rule stays as the fallback.
 
 ## Tasks
 
@@ -48,9 +50,13 @@ P1 only. Commit is recorded after the work unit lands.
 | T23 | S3 | `install` and command help describe the Pi runtime truthfully | inline | `316fb2b`, `0b8e41d` |
 | T24 | S7 | gga fixes: honest export outcome, dry-run purity, malformed record, finalization wording, skipped prelude | inline | `8b206b8`, `3e5863c`, `5a4c6e3`, `c503a97`, `b153786` |
 | T25 | S8 | Verify P3 and refresh the graph | inline | this document's commit (evidence below) |
+| T26 | S7, S10 | `rapso context`: build the prelude only (no prepared-context id, no `session.json`, no agent), with `--dry-run` | inline | pending |
+| T27 | S7 | Write the prelude atomically so a background refresh never exposes a torn file to the reader | inline | pending |
+| T28 | S7, S10 | Ship the `rapsodia-context` Pi project extension: refresh the prelude in the background on `session_start`, point the first run at it from `before_agent_start`, fail soft | inline | pending |
+| T29 | S7, S10 | Wire the extension into `init`/`adopt` ownership and the `AGENTS.md` prelude rule (root and template) | inline | pending |
+| T30 | S8 | Verify P4 and record the evidence | inline | pending |
 
-P4..P5 (session integration, migration and docs) are out of scope here and stay in
-`docs/pi-migration.md` §6.
+P5 (consumer migration and docs) is out of scope here and stays in `docs/pi-migration.md` §6.
 
 ## Verification
 
@@ -214,3 +220,4 @@ waits for it.
 - **L13** (P3 approved): "ok perfecto continua con P3". Decision: Pi owns the Engram session end to end. `rapso start` prepares local context only (prelude + `session.json`), `--run` becomes opt-in with `RAPSO_AGENT` (default `gentle-shell`), and `--no-open` is removed. `rapso close` keeps wiki export, cleanup, and the retrospective; it loses `mem_session_end`/`mem_session_summary` and the `opencode.json` rewrite, and it no longer requires a prepared context.
 - **L14** (gga fixes in P3): gga found and the parent fixed: `close` ignored a failed wiki export, `start --dry-run` still ran state migration (and generated the id before the dry-run branch), the retrospective asserted the graph was missing "at session start" when it was checked at finalization, a malformed `session.json` could produce `NaNm`, `install` claimed to install when it only prints instructions, and the prepare-only message pointed at a prelude skipped by `--no-prelude`. gga also suspected `pip install graphifyy`; that is the real PyPI name for the module `graphify`, so it stays.
 - **L15** (P3 delivered): 10 commits (`0d5b29b`..`b153786`). `start`/`close`/`status`/`install`/help no longer name OpenCode. Verification: typecheck and build pass; `start --dry-run` writes nothing; `start --no-prelude` writes state and no prelude; `start --run` with `RAPSO_AGENT=true` exits 0; `close` exits 0 with and without a prepared context; the retrospective carries the project and message; `status` reports the context and `gentle-shell 4.3.0`; `graphify . --update` pruned 22 deleted sources. The worktree graph was refreshed before the doc commit so later reviews read current nodes.
+- **L16** (P4 decisions, verbatim selections): "B — extensión de proyecto (la shippea el template)" and "Sí, agregar `rapso context`". The extension lives in the template at `.pi/extensions/rapsodia-context.ts`, is declared by Pi's project extensions directory rather than a settings entry, and is inert until project trust is granted; the `AGENTS.md` prelude rule remains the untrusted fallback. `rapso context` becomes the CLI entry point the extension calls, so the extension never reimplements prelude production.
