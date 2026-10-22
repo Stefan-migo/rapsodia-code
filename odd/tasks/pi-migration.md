@@ -2,7 +2,8 @@
 
 Feature branch `odd/pi-migration`. Worktree `../rapsodia-code-odd-pi-migration`.
 Proposal and evidence: `docs/pi-migration.md` (read it before any task).
-P1, P2, P3, and P4 are delivered on this branch. P5 remains, tracked in `docs/pi-migration.md` §6.
+P1, P2, P3, and P4 are delivered on this branch. P5 is in progress, tracked in
+`docs/pi-migration.md` §6.
 
 ## Specs
 
@@ -54,8 +55,14 @@ P1 only. Commit is recorded after the work unit lands.
 | T28 | S7, S10 | Ship the `rapsodia-context` Pi project extension: refresh the prelude in the background on `session_start`, point the first run at it from `before_agent_start`, fail soft | inline | `3567ff1` |
 | T29 | S7, S10 | Wire the extension into `init`/`adopt` ownership and the `AGENTS.md` prelude rule (root and template) | inline | `513e8b1`, `f7c1a02` |
 | T30 | S8 | Verify P4 and record the evidence | inline | this document's commit (evidence below) |
-
-P5 (consumer migration and docs) is out of scope here and stays in `docs/pi-migration.md` §6.
+| T31 | S3 | `adopt`: fill the retirement plan for the OpenCode surface instead of leaving `Removed`/`Leftover` empty; never delete a user file | worker | pending |
+| T32 | S3 | `update`: report the retired template paths as a migration plan and say which are safe to remove | worker | pending |
+| T33 | S3 | `adopt --force` and `update --force` name every file they overwrite | worker | pending |
+| T34 | S3 | `init --force`: make the warning match what it does (copy over the directory, remove only `.git`) | inline | pending |
+| T35 | S3 | `scripts/rapso-sync.sh`: provision `.pi/extensions/rapsodia-context.ts` with the skills | inline | pending |
+| T36 | S3 | Docs: `README.md`, template `USER-GUIDE.md` and `SYSTEM-MAP.md` describe the Pi surface, the `context` command, and the retired OpenCode surface | worker | pending |
+| T37 | S3 | Bump the CLI to 1.1.0 and rebuild `cli/dist` | inline | pending |
+| T38 | S8 | Verify P5 against a 1.0.0-shaped and a 1.0.3-shaped consumer and record the evidence | inline | pending |
 
 ## Verification
 
@@ -265,3 +272,4 @@ waits for it.
 - **L15** (P3 delivered): 10 commits (`0d5b29b`..`b153786`). `start`/`close`/`status`/`install`/help no longer name OpenCode. Verification: typecheck and build pass; `start --dry-run` writes nothing; `start --no-prelude` writes state and no prelude; `start --run` with `RAPSO_AGENT=true` exits 0; `close` exits 0 with and without a prepared context; the retrospective carries the project and message; `status` reports the context and `gentle-shell 4.3.0`; `graphify . --update` pruned 22 deleted sources. The worktree graph was refreshed before the doc commit so later reviews read current nodes.
 - **L16** (P4 decisions, verbatim selections): "B — extensión de proyecto (la shippea el template)" and "Sí, agregar `rapso context`". The extension lives in the template at `.pi/extensions/rapsodia-context.ts`, is declared by Pi's project extensions directory rather than a settings entry, and is inert until project trust is granted; the `AGENTS.md` prelude rule remains the untrusted fallback. `rapso context` becomes the CLI entry point the extension calls, so the extension never reimplements prelude production.
 - **L17** (P4 delivered): 8 commits (`6b26bb6`..`f7c1a02`). `rapso context` builds the prelude only; `cli/src/template/.pi/extensions/rapsodia-context.ts` refreshes it on `session_start` and points the first user run at it; `buildPrelude` swaps the file in with one rename; `adopt` owns `.pi/extensions/**`; both `AGENTS.md` files lost the stale `rapso start --no-open` instruction. Verification: typecheck and build pass; `context --dry-run` writes nothing; `context` writes only the prelude; the extension passes eight stub-API scenarios in a throwaway harness; a real `gentle-shell --approve -p` run in a generated project executed `rapso context` at the project root, wrote the prelude, and carried the `rapsodia_context` section in the transcript while the five-minute guard suppressed a second refresh; `init` ships 20 files including the extension; `adopt --dry-run` reports `Created (3)` and leaves `opencode.json` alone; the differential against base `2d1869f` shows only the requested differences. gga: one real fix (raw `err.message` in a warning replaced by a bounded message), one false positive (reading our own `RAPSO_BIN` override as an ambient credential), one pre-existing `--force` overwrite-notice gap deferred to P5.
+- **L18** (P5 approved): "si continua con P5 ahora". Also decided: `lumat-agent` migrates after P5 with the fixed CLI, not before; `.gga` keeps `PROVIDER="opencode"` because gga has no `pi` provider and OpenCode is still installed, and that dependency is documented rather than removed; push/PR stays a human decision.
