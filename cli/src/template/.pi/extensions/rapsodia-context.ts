@@ -42,6 +42,16 @@ function preludeAgeMs(path) {
 	}
 }
 
+/**
+ * An npm global install on Windows puts `rapso.cmd` on PATH, and `spawn` without a shell cannot run
+ * a `.cmd`; asking for `rapso` there fails silently. `RAPSO_BIN` overrides both, for a native
+ * `.exe`, a local build, or a test shim.
+ */
+function rapsoCommand() {
+	if (process.env.RAPSO_BIN) return process.env.RAPSO_BIN;
+	return process.platform === "win32" ? "rapso.cmd" : "rapso";
+}
+
 function describeAge(ageMs) {
 	if (ageMs < 60_000) return "just now";
 	return `${Math.round(ageMs / 60_000)} min ago`;
@@ -52,7 +62,7 @@ export default function rapsodiaContext(pi) {
 	let pointedAtPrelude = false;
 
 	async function refresh(ctx, projectRoot) {
-		const command = process.env.RAPSO_BIN || "rapso";
+		const command = rapsoCommand();
 		let result;
 		try {
 			result = await pi.exec(command, ["context"], { cwd: projectRoot, timeout: REFRESH_TIMEOUT_MS });
