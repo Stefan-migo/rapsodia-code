@@ -1,5 +1,5 @@
 import { execFileSync } from '../utils/exec';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
 import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
@@ -65,8 +65,12 @@ function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): 
 
   // Early exit on the first recorded file: a retired tree can carry node_modules or a 3.8 MB
   // openspec directory, and the plan only needs to know whether Rapsodia wrote inside it.
+  // `lstat` and an explicit symlink refusal: a link can point outside the project, and a link to an
+  // ancestor would recurse forever on a project that keeps one under `.opencode`.
   const holdsRecordedFile = (absolute: string): boolean => {
-    if (!statSync(absolute).isDirectory()) return manifestPaths.has(normalized(absolute));
+    const stat = lstatSync(absolute);
+    if (stat.isSymbolicLink()) return false;
+    if (!stat.isDirectory()) return manifestPaths.has(normalized(absolute));
     for (const entry of readdirSync(absolute)) {
       if (holdsRecordedFile(join(absolute, entry))) return true;
     }
@@ -80,14 +84,16 @@ function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): 
   for (const root of RETIRED_ROOTS) {
     const absolute = join(targetDir, root);
     if (!existsSync(absolute)) continue;
-    // `.opencode` is expanded so each skill stays visible next to the ones Rapsodia wrote.
-    if (root !== '.opencode' || !statSync(absolute).isDirectory()) {
+    // `.opencode` is expanded so each skill stays visible next to the ones Rapsodia wrote. A
+    // symlinked root is reported as one entry and never expanded: its contents are not ours.
+    const stat = lstatSync(absolute);
+    if (root !== '.opencode' || stat.isSymbolicLink() || !stat.isDirectory()) {
       record(absolute);
       continue;
     }
     for (const entry of readdirSync(absolute)) {
       const child = join(absolute, entry);
-      if (entry === 'skills' && statSync(child).isDirectory()) {
+      if (entry === 'skills' && lstatSync(child).isDirectory()) {
         for (const skill of readdirSync(child)) record(join(child, skill));
       } else {
         record(child);
