@@ -2,7 +2,7 @@
 
 Feature branch `odd/pi-migration`. Worktree `../rapsodia-code-odd-pi-migration`.
 Proposal and evidence: `docs/pi-migration.md` (read it before any task).
-P1 and P2 are delivered on this branch. P3..P5 remain, tracked in `docs/pi-migration.md` §6.
+P1, P2, and P3 are delivered on this branch. P4..P5 remain, tracked in `docs/pi-migration.md` §6.
 
 ## Specs
 
@@ -42,9 +42,15 @@ P1 only. Commit is recorded after the work unit lands.
 | T17 | S2, S5 | Retire the agent/command surface, custom tools, config, graphify plugin, ponytail pack, bootstrap/graphify/persona skills, and `setup.sh` | inline | `d4f8f1c`, `d99d4e4`, `9ac8d1e`, `c5fc20d`, `21ab933`, `b2176bd`, `c3ca89c` |
 | T18 | S3 | Adapt `install-deps.sh` and `rapso-sync.sh` | inline | `b0f4c5a`, `259ec41` |
 | T19 | S8 | Verify P2 and record the evidence | inline | this document's commit (evidence below) |
+| T20 | S7 | `start` prepares local context (no Engram session); `--run` launches `RAPSO_AGENT` (default `gentle-shell`) | inline | `0d5b29b` |
+| T21 | S7 | `close` exports the wiki, cleans the prepared context, and writes the retrospective without MCP or `opencode.json` | inline | `0d5b29b` |
+| T22 | S3 | `status` reports the prepared context and the Pi agent | inline | `ddfca24` |
+| T23 | S3 | `install` and command help describe the Pi runtime truthfully | inline | `316fb2b`, `0b8e41d` |
+| T24 | S7 | gga fixes: honest export outcome, dry-run purity, malformed record, finalization wording, skipped prelude | inline | `8b206b8`, `3e5863c`, `5a4c6e3`, `c503a97`, `b153786` |
+| T25 | S8 | Verify P3 and refresh the graph | inline | this document's commit (evidence below) |
 
-P3..P5 (CLI session surface, session integration, migration and docs) are out of scope here and
-stay in `docs/pi-migration.md` §6.
+P4..P5 (session integration, migration and docs) are out of scope here and stay in
+`docs/pi-migration.md` §6.
 
 ## Verification
 
@@ -140,11 +146,31 @@ Run from the worktree after `npm run build`.
 5. `bash -n scripts/rapso-sync.sh` → exit 0. `shellcheck` is not installed, so this is the check
    actually run.
 
+### P3 — CLI session surface
+
+Run from the worktree after `npm run build`.
+
+1. `npm run typecheck` from `cli/`: `tsc --noEmit`, exit 0. `npm run build`: exit 0.
+2. `rapso start --help` lists `--no-prelude`, `--run`, `--dry-run`; `--no-open` is gone.
+3. `rapso start --dry-run` prints no context id and performs no migration or write.
+4. `rapso start --no-prelude` writes `.rapsodia-code/session.json`, builds no prelude, launches no
+   agent, and prints no "read the prelude" instruction.
+5. `rapso start` builds `.rapsodia-code/prelude.md`; `rapso start --run` with `RAPSO_AGENT=true`
+   launches the binary and exits 0 with `true completed`.
+6. `rapso close` with no prepared context exits 0, exports the wiki, and reports nothing to clean.
+   `rapso close --message "..." --retrospective` removes `session.json`, writes
+   `.rapsodia-code/retrospectives/<date>-<label>.md`, and the file carries the project name and the
+   message.
+7. `rapso status` reports `Context: — (none prepared)` after close, `Agent: ✅ gentle-shell 4.3.0`,
+   and an honest `Engram: ⚠️ Not connected` line.
+8. `graphify . --update` after the refactor: 22 deleted sources pruned, graph rebuilt, exit 0.
+   `graphify-out/` is gitignored; the authoritative graph is refreshed after the merge.
+
 ### Review slice
 
-P1 landed 9 commits and ~1625 authored changed lines. P2 added 19 commits and roughly 1690 more
-(mostly deletions plus two template rewrites). Cumulatively the branch is ~3300 authored lines across
-29 commits. That is past the ~400-line review slice. The delivery strategy for a slice this size is a
+P1 landed 9 commits and ~1625 authored changed lines. P2 added 19 commits and roughly 1690 more.
+P3 added 10 commits and roughly 140 more. Cumulatively the branch is ~3830 authored lines across
+40 commits. That is past the ~400-line review slice. The delivery strategy for a slice this size is a
 PR, and push/PR creation is the human's decision, so the boundary is recorded here and the branch
 waits for it.
 
@@ -156,8 +182,10 @@ waits for it.
   template over the existing files. gga flagged the mismatch between the message and the behavior.
   Fixing it changes destructive behavior (clear the directory vs reword the warning), so it needs a
   human decision; not part of P2.
-- P3 remains: `start`, `close`, `status`, `install`, and the command descriptions still name
-  OpenCode; `close` still rewrites `opencode.json`; `status` still runs `opencode --version`.
+- P4 remains: the `session_start` prelude refresh (Pi extension or instruction-only) and a
+  `rapso context` alias if `start` proves too loaded a name.
+- `utils/mcp.ts` is now used only by the prelude's Engram read. If P4 replaces that read with
+  `gentle-engram` tools, the MCP client can be retired.
 - `SYSTEM-MAP.md`, `USER-GUIDE.md`, and `README.md` still describe the OpenCode surface (P5).
 - `rapso update` on a project created by 1.0.3 was not exercised in P2. It will report the retired
   template paths as deleted; migrating an already-adopted project is P5.
@@ -183,3 +211,6 @@ waits for it.
 - **L10** (P2 approved and redefined): "vamos con P2". P2 was scoped as the template port plus the readers whose deletion would otherwise break the CLI, because `adopt.ts:70` read `cli/src/template/opencode.json` on every adoption. Delegated to `gentle-ai-worker`; the writer role refused deletion and commits and changed nothing, so P2 was implemented inline by the parent. Report fallback: the writer role was unusable for this unit.
 - **L11** (gga-driven fixes): gga reviewed every TypeScript commit. It found and the parent fixed: `AdoptPlan` formatting, duplicated managed blocks in `mergeGitignore`, `pythonCommand` living in one file while `resolvePythonCommand` lived in another, the duplicated `AdoptOptions` declaration, and `isFile()` accepting an executable directory. Two findings were false positives and one (`init --force`) is a pre-existing behavior change deferred to the human.
 - **L12** (P2 delivered): 19 commits (`4bb29bf`..`259ec41` plus the earlier template commits `dc682cd`, `db0bf1b`, `b0f4c5a`, `d4f8f1c`, `d99d4e4`, `9ac8d1e`, `c5fc20d`, `21ab933`, `b2176bd`, `c3ca89c`, `1641d45`). Typecheck and build pass; a fresh `init` produces no `.opencode`, no `opencode.json`, no `setup.sh`, both `.agents/skills`, and the three injectable headings; `adopt` on a legacy consumer leaves its `opencode.json` untouched and keeps its `AGENTS.md` content.
+- **L13** (P3 approved): "ok perfecto continua con P3". Decision: Pi owns the Engram session end to end. `rapso start` prepares local context only (prelude + `session.json`), `--run` becomes opt-in with `RAPSO_AGENT` (default `gentle-shell`), and `--no-open` is removed. `rapso close` keeps wiki export, cleanup, and the retrospective; it loses `mem_session_end`/`mem_session_summary` and the `opencode.json` rewrite, and it no longer requires a prepared context.
+- **L14** (gga fixes in P3): gga found and the parent fixed: `close` ignored a failed wiki export, `start --dry-run` still ran state migration (and generated the id before the dry-run branch), the retrospective asserted the graph was missing "at session start" when it was checked at finalization, a malformed `session.json` could produce `NaNm`, `install` claimed to install when it only prints instructions, and the prepare-only message pointed at a prelude skipped by `--no-prelude`. gga also suspected `pip install graphifyy`; that is the real PyPI name for the module `graphify`, so it stays.
+- **L15** (P3 delivered): 10 commits (`0d5b29b`..`b153786`). `start`/`close`/`status`/`install`/help no longer name OpenCode. Verification: typecheck and build pass; `start --dry-run` writes nothing; `start --no-prelude` writes state and no prelude; `start --run` with `RAPSO_AGENT=true` exits 0; `close` exits 0 with and without a prepared context; the retrospective carries the project and message; `status` reports the context and `gentle-shell 4.3.0`; `graphify . --update` pruned 22 deleted sources. The worktree graph was refreshed before the doc commit so later reviews read current nodes.
