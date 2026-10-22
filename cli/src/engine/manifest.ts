@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, relative } from 'path';
 import { hashFile, hashDirectory, collectFiles, hashTemplateFile, TemplateOptions } from './template';
 import { stateDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
@@ -110,7 +110,11 @@ export function detectChanges(
     const manifestHash = manifestFileMap.get(file);
 
     if (!manifestHash) {
-      added.push(file);
+      // A file the project already has but the manifest never recorded is the project's, not a new
+      // template file. Reporting it as new made `update` offer to write over it on a project
+      // created before that path shipped (a 1.0.0 AGENTS.md, for instance).
+      if (existsSync(projectPath)) userModified.push(file);
+      else added.push(file);
     } else if (templateHash !== manifestHash) {
       if (existsSync(projectPath)) {
         const currentHash = hashFile(projectPath);
