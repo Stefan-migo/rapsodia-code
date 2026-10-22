@@ -189,6 +189,15 @@ No code.
 1. Add `rapso context` (thin wrapper over `buildPrelude`) if `start --no-open` is too loaded a name.
 2. Ship the `rapsodia-context` Pi extension (Option B) or the instruction-only rule (Option A).
 
+Delivered: `rapso context` builds the prelude only (no prepared-context id, no `session.json`, no
+agent, `--dry-run` available); `cli/src/template/.pi/extensions/rapsodia-context.ts` refreshes that
+prelude in the background on `session_start` (skipping a prelude younger than five minutes, timing
+out at 60s, staying silent when `rapso` is absent or predates the command) and points the first user
+run at the file through a `rapsodia_context` prompt section. `buildPrelude` now swaps the file in
+with one rename, so a reader never sees a half-written prelude. `adopt` owns `.pi/extensions/**`
+next to `.agents/skills/**`, so a consumer project receives the extension too. The `AGENTS.md` rule
+stays as the untrusted fallback and no longer points at the removed `start --no-open`.
+
 ### P5 — Migration and docs
 1. Retirement is destructive in adopted projects (high risk item 1). `adopt --dry-run` must print the
    removal plan, and `--force` must remain the only way to overwrite user-modified owned files.
@@ -233,8 +242,9 @@ repository's PR policy.
 
 ## 10. Open questions
 
-1. Option A (instruction-only) or Option B (Pi extension) for the session prelude? The human's
-   description points at B; cost is one small extension.
+1. ~~Option A (instruction-only) or Option B (Pi extension) for the session prelude?~~ Resolved in
+   P4: Option B, a project extension shipped in the template, with Option A as the untrusted
+   fallback.
 2. Does `analyze` still earn its place once `gentle-engram` provides session summaries?
 3. Should the wiki export stay part of `rapso close`, or become `rapso wiki export`?
 4. Do `SYSTEM-MAP.md` and `USER-GUIDE.md` survive the Pi migration, or are they Cortex-era docs?

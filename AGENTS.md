@@ -24,6 +24,7 @@ Where things live:
 | User skills | `~/.agents/skills/` (`graphify` lives here) |
 | User MCP servers | `~/.gentle-shell/agent/mcp.json` (Engram is already declared) |
 | Optional project MCP servers | `.pi/mcp.json` — read only after project trust is granted |
+| Project extensions | `.pi/extensions/` — loaded only after project trust is granted |
 | Local ignored state | `.rapsodia-code/` (manifest, config, sessions, prelude) |
 
 ## Session Context
@@ -33,8 +34,12 @@ discoveries. Do not launch an agent through `rapso`, and do not treat `rapso sta
 owner.
 
 If `.rapsodia-code/prelude.md` exists when a session starts, read it before the first task: it holds
-scored Engram context, the Graphify report, and the project manifest summary. Refresh it with
-`rapso start --no-open` when it is stale.
+scored Engram context, the Graphify report, and the project manifest summary.
+
+In a trusted project, `.pi/extensions/rapsodia-context.ts` refreshes that prelude in the background
+on session start and points the first run at it. Without project trust the extension does not load,
+so run `rapso context` yourself when the prelude is stale. `rapso context` only rewrites the
+prelude: it opens no session, writes no prepared-context record, and launches no agent.
 
 ## Tool-Belt
 
