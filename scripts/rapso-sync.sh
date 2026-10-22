@@ -2,9 +2,9 @@
 # rapso-sync.sh — push the Rapsodia pack into every project on your list.
 #
 # For each project it:
-#   1. Installs the skills the pack owns into <project>/.agents/skills/. A pack skill outside
-#      that list does not travel. Retired pack skills are reported, never removed: `rapso adopt`
-#      owns consumer migration.
+#   1. Installs the skills the pack owns into <project>/.agents/skills/ and the Pi extension into
+#      <project>/.pi/extensions/. A pack skill outside that list does not travel. Retired pack
+#      skills are reported, never removed: `rapso adopt` owns consumer migration.
 #   2. Repairs the legacy Cortex references in <project>/AGENTS.md.
 #   3. Migrates legacy flat session directories into open|ready-for-odd|archived.
 #
@@ -62,8 +62,31 @@ sync_skills() {
     echo "    skill: $name"
   done
   for name in rapso-persona ponytail-review ponytail-audit ponytail-debt ponytail-help bootstrap; do
-    [[ -e "$target/$name" || -L "$target/$name" ]] && echo "    retired pack skill present (adopt owns its removal): $name"
+    # An `if` and not `[[ ]] && echo`: a failing last test made this function return 1, and
+    # `set -e` then aborted the whole run before AGENTS.md repair and session migration.
+    if [[ -e "$target/$name" || -L "$target/$name" ]]; then
+      echo "    retired pack skill present (adopt owns its removal): $name"
+    fi
   done
+  return 0
+}
+
+# The extension is part of the pack: without it a trusted project never refreshes its prelude on
+# session start, and the AGENTS.md rule is the only path left.
+sync_extension() {
+  local target="$1/.pi/extensions"
+  local src="$PACK_DIR/cli/src/template/.pi/extensions/rapsodia-context.ts"
+  local dest="$target/rapsodia-context.ts"
+  if [[ ! -f "$src" ]]; then
+    echo "    missing pack extension: rapsodia-context.ts"
+    return 0
+  fi
+  if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
+    return 0
+  fi
+  run mkdir -p "$target"
+  run cp "$src" "$dest"
+  echo "    extension: rapsodia-context.ts"
 }
 
 repair_agents() {
@@ -207,6 +230,7 @@ while IFS= read -r raw || [[ -n "$raw" ]]; do
     continue
   fi
   sync_skills "$project"
+  sync_extension "$project"
   repair_agents "$project"
   migrate_sessions "$project"
   echo
