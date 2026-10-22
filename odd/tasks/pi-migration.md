@@ -2,8 +2,8 @@
 
 Feature branch `odd/pi-migration`. Worktree `../rapsodia-code-odd-pi-migration`.
 Proposal and evidence: `docs/pi-migration.md` (read it before any task).
-P1, P2, P3, and P4 are delivered on this branch. P5 is in progress, tracked in
-`docs/pi-migration.md` §6.
+P1, P2, P3, P4, and P5 are delivered on this branch. The branch is ready for the human's push and
+PR decision.
 
 ## Specs
 
@@ -55,14 +55,14 @@ P1 only. Commit is recorded after the work unit lands.
 | T28 | S7, S10 | Ship the `rapsodia-context` Pi project extension: refresh the prelude in the background on `session_start`, point the first run at it from `before_agent_start`, fail soft | inline | `3567ff1` |
 | T29 | S7, S10 | Wire the extension into `init`/`adopt` ownership and the `AGENTS.md` prelude rule (root and template) | inline | `513e8b1`, `f7c1a02` |
 | T30 | S8 | Verify P4 and record the evidence | inline | this document's commit (evidence below) |
-| T31 | S3 | `adopt`: fill the retirement plan for the OpenCode surface instead of leaving `Removed`/`Leftover` empty; never delete a user file | worker | pending |
-| T32 | S3 | `update`: report the retired template paths as a migration plan and say which are safe to remove | worker | pending |
-| T33 | S3 | `adopt --force` and `update --force` name every file they overwrite | worker | pending |
-| T34 | S3 | `init --force`: make the warning match what it does (copy over the directory, remove only `.git`) | inline | pending |
-| T35 | S3 | `scripts/rapso-sync.sh`: provision `.pi/extensions/rapsodia-context.ts` with the skills | inline | pending |
-| T36 | S3 | Docs: `README.md`, template `USER-GUIDE.md` and `SYSTEM-MAP.md` describe the Pi surface, the `context` command, and the retired OpenCode surface | worker | pending |
-| T37 | S3 | Bump the CLI to 1.1.0 and rebuild `cli/dist` | inline | pending |
-| T38 | S8 | Verify P5 against a 1.0.0-shaped and a 1.0.3-shaped consumer and record the evidence | inline | pending |
+| T31 | S3 | `adopt`: fill the retirement plan for the OpenCode surface instead of leaving `Removed`/`Leftover` empty; never delete a user file | worker | `1433e1b`, `7a0b2d2`, `f46ed18`, `435afab`, `c0c73e1` |
+| T32 | S3 | `update`: report the retired template paths as a migration plan and say which are safe to remove | worker | `32b0edc` (+ `6ab9b00` for the unrecorded-file safety fix) |
+| T33 | S3 | `adopt --force` and `update --force` name every file they overwrite | worker | `1433e1b` (`update` already named them) |
+| T34 | S3 | `init --force`: make the warning match what it does (copy over the directory, remove only `.git`) | inline | `b86bad4` |
+| T35 | S3 | `scripts/rapso-sync.sh`: provision `.pi/extensions/rapsodia-context.ts` with the skills | inline | `90a1b62` |
+| T36 | S3 | Docs: `README.md`, template `USER-GUIDE.md` and `SYSTEM-MAP.md` describe the Pi surface, the `context` command, and the retired OpenCode surface | worker | `69487e7` |
+| T37 | S3 | Bump the CLI to 1.1.0 and rebuild `cli/dist` | inline | `c1185f1` |
+| T38 | S8 | Verify P5 against a 1.0.0-shaped and a 1.0.3-shaped consumer and record the evidence | inline | this document's commit (evidence below) |
 
 ## Verification
 
@@ -222,11 +222,47 @@ Run from the worktree after `npm run build`.
 9. `graphify . --update`: 9 sources re-extracted, 0 deleted, exit 0. `graphify-out/` is gitignored;
    the authoritative graph is refreshed after the merge.
 
+### P5 — consumer migration and docs
+
+Run from the worktree after `npm run build` (now `1.1.0`).
+
+1. `npm run typecheck` and `npm run build`: exit 0.
+2. A 1.0.0-shaped consumer (manifest records the retired `.opencode` files) with `adopt --dry-run`:
+   `Created (3)` (both `.agents/skills` and `.pi/extensions/rapsodia-context.ts`), `Removed (8)` for
+   the entries Rapsodia wrote (`.opencode/agents`, `.opencode/plugins`, the five retired skills,
+   `.opencode/tools`), `Leftover (4)` for `.opencode/skills/component-adapter`, `opencode.json`,
+   `openspec` and `scripts/setup.sh`. The real `adopt --yes` creates the same three files and deletes
+   nothing: `.opencode`, `openspec`, `opencode.json` and `scripts/setup.sh` are all still there.
+3. Symlinks and unreadable directories: a `.opencode/skills` symlink to an ancestor, a symlink to
+   `/etc`, a dangling `.opencode`/`openspec` symlink, and a `chmod 000` skills directory each produce
+   one reported entry and exit 0 — no recursion, no traversal outside the project, no crash.
+4. `adopt --force` on a conflicting owned file: the dry run reports `Conflicting (1)` and claims no
+   overwrite; the forced run reports `Overwritten (1)` plus `File was overwritten: <path>`.
+5. `update --check` and `update --dry-run` on the 1.0.0 consumer: `Migration plan: 9 path(s) are no
+   longer shipped`, then the same plan as a list. A project whose only difference is a retired path
+   no longer reports "up to date". `AGENTS.md` is now classified `User-modified` instead of
+   `New files`, so `update` cannot overwrite a project file the manifest never recorded without
+   `--force` or an explicit prompt.
+6. A 1.0.3-shaped consumer: `update --check` reports 1 new file
+   (`.pi/extensions/rapsodia-context.ts`) and 3 auto-updatable template docs.
+7. `init --force` into a directory holding a `wiki` symlink: the warning matches the behaviour
+   (template files replaced, other files kept, `.git` recreated), 10 files are copied, the 10
+   symlink-routed paths are refused by name, and nothing is written outside the directory.
+8. `scripts/rapso-sync.sh`: dry run, real run and a second idempotent run against a scratch project —
+   the two skills and `.pi/extensions/rapsodia-context.ts` are provisioned, and the script now reaches
+   `repair_agents` and `migrate_sessions` (before this fix a failing `[[ ]] && echo` in `sync_skills`
+   made it return 1, and `set -e` aborted the whole run).
+9. Differential against the pre-P5 base `0dfa397` (its own build, identical fixtures): `update`
+   differs only by `AGENTS.md` moving from `New files` to `User-modified` and the retired block
+   becoming a migration plan; `init` is identical apart from the fixture path.
+10. `graphify . --update` after the code changes; `graphify-out/` is gitignored and refreshed again
+    after the merge.
+
 ### Review slice
 
 P1 landed 9 commits and ~1625 authored changed lines. P2 added 19 commits and roughly 1690 more.
-P3 added 10 commits and roughly 140 more. P4 added 8 commits and roughly 200 more. Cumulatively the
-branch is ~4050 authored lines across 48 commits. That is past the ~400-line review slice. The delivery strategy for a slice this size is a
+P3 added 10 commits and roughly 140 more. P4 added 8 commits and roughly 200 more. P5 added 12
+commits and roughly 450 more. Cumulatively the branch is ~4450 authored lines across 60 commits. That is past the ~400-line review slice. The delivery strategy for a slice this size is a
 PR, and push/PR creation is the human's decision, so the boundary is recorded here and the branch
 waits for it.
 
@@ -273,3 +309,4 @@ waits for it.
 - **L16** (P4 decisions, verbatim selections): "B — extensión de proyecto (la shippea el template)" and "Sí, agregar `rapso context`". The extension lives in the template at `.pi/extensions/rapsodia-context.ts`, is declared by Pi's project extensions directory rather than a settings entry, and is inert until project trust is granted; the `AGENTS.md` prelude rule remains the untrusted fallback. `rapso context` becomes the CLI entry point the extension calls, so the extension never reimplements prelude production.
 - **L17** (P4 delivered): 8 commits (`6b26bb6`..`f7c1a02`). `rapso context` builds the prelude only; `cli/src/template/.pi/extensions/rapsodia-context.ts` refreshes it on `session_start` and points the first user run at it; `buildPrelude` swaps the file in with one rename; `adopt` owns `.pi/extensions/**`; both `AGENTS.md` files lost the stale `rapso start --no-open` instruction. Verification: typecheck and build pass; `context --dry-run` writes nothing; `context` writes only the prelude; the extension passes eight stub-API scenarios in a throwaway harness; a real `gentle-shell --approve -p` run in a generated project executed `rapso context` at the project root, wrote the prelude, and carried the `rapsodia_context` section in the transcript while the five-minute guard suppressed a second refresh; `init` ships 20 files including the extension; `adopt --dry-run` reports `Created (3)` and leaves `opencode.json` alone; the differential against base `2d1869f` shows only the requested differences. gga: one real fix (raw `err.message` in a warning replaced by a bounded message), one false positive (reading our own `RAPSO_BIN` override as an ambient credential), one pre-existing `--force` overwrite-notice gap deferred to P5.
 - **L18** (P5 approved): "si continua con P5 ahora". Also decided: `lumat-agent` migrates after P5 with the fixed CLI, not before; `.gga` keeps `PROVIDER="opencode"` because gga has no `pi` provider and OpenCode is still installed, and that dependency is documented rather than removed; push/PR stays a human decision.
+- **L19** (P5 delivered): 12 commits (`2751a2e`..`c1185f1`). `adopt` now fills `Removed`/`Leftover` from the retired OpenCode surface and reports every forced overwrite; `update` describes retired paths as a migration plan and no longer treats an existing unrecorded file as new; `init --force` says what it does and refuses to write the template through a symlink; `scripts/rapso-sync.sh` provisions the Pi extension and no longer aborts before AGENTS.md repair; README, USER-GUIDE and SYSTEM-MAP describe the Pi surface; version 1.1.0. Verification: typecheck and build pass; the 1.0.0 and 1.0.3 fixtures behave as listed above; symlink, dangling-symlink and unreadable-directory cases stay contained; the differential against `0dfa397` shows only the intended differences. gga drove five real fixes on `adopt`/`update`/`init` (symlink following, dangling symlinks, unreadable directories, dead code in `update`, a wrong "up to date" report) and produced one out-of-scope finding (`copyTemplate` writing through symlinks, now fixed) plus one deferred one (`TEMPLATE_DIR` resolved from `__dirname`).
