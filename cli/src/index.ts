@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { initCommand } from './commands/init';
 import { installCommand } from './commands/install';
 import { startCommand } from './commands/start';
+import { contextCommand } from './commands/context';
 import { closeCommand } from './commands/close';
 import { statusCommand } from './commands/status';
 import { updateCommand } from './commands/update';
@@ -47,6 +48,14 @@ program
   .option('--dry-run', 'show what would happen without writing')
   .action(async (options) => {
     await startCommand(options);
+  });
+
+program
+  .command('context')
+  .description('Build the project context prelude without preparing a session or launching an agent')
+  .option('--dry-run', 'show what would happen without writing')
+  .action(async (options) => {
+    await contextCommand(options);
   });
 
 program
