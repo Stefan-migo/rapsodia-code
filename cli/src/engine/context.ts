@@ -168,7 +168,10 @@ async function fetchGraphifyContext(projectDir: string, projectName: string): Pr
             date: new Date(),
           });
         }
-      } catch {}
+      } catch {
+        // A failed tool call is not worth the prelude: say it was partial and keep going.
+        warn('Graphify graph query unavailable — the prelude continues without it');
+      }
 
       try {
         const godResult = await client.callTool('god_nodes', { top_n: 5 });
@@ -183,7 +186,9 @@ async function fetchGraphifyContext(projectDir: string, projectName: string): Pr
             date: new Date(),
           });
         }
-      } catch {}
+      } catch {
+        warn('Graphify god nodes unavailable — the prelude continues without it');
+      }
     } finally {
       await client.close();
     }
