@@ -65,13 +65,36 @@ function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): 
 
   // Early exit on the first recorded file: a retired tree can carry node_modules or a 3.8 MB
   // openspec directory, and the plan only needs to know whether Rapsodia wrote inside it.
+  // This whole function is a report: an unreadable directory must degrade to "we cannot classify
+  // it", never abort an adoption.
+  const readDirectory = (absolute: string): string[] | null => {
+    try {
+      return readdirSync(absolute);
+    } catch {
+      return null;
+    }
+  };
+
+  const isDirectory = (absolute: string): boolean => {
+    try {
+      return lstatSync(absolute).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+
   // `lstat` and an explicit symlink refusal: a link can point outside the project, and a link to an
   // ancestor would recurse forever on a project that keeps one under `.opencode`.
   const holdsRecordedFile = (absolute: string): boolean => {
-    const stat = lstatSync(absolute);
+    let stat;
+    try {
+      stat = lstatSync(absolute);
+    } catch {
+      return false;
+    }
     if (stat.isSymbolicLink()) return false;
     if (!stat.isDirectory()) return manifestPaths.has(normalized(absolute));
-    for (const entry of readdirSync(absolute)) {
+    for (const entry of readDirectory(absolute) ?? []) {
       if (holdsRecordedFile(join(absolute, entry))) return true;
     }
     return false;
@@ -97,10 +120,16 @@ function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): 
       record(absolute);
       continue;
     }
-    for (const entry of readdirSync(absolute)) {
+    const entries = readDirectory(absolute);
+    if (!entries) {
+      record(absolute);
+      continue;
+    }
+    for (const entry of entries) {
       const child = join(absolute, entry);
-      if (entry === 'skills' && lstatSync(child).isDirectory()) {
-        for (const skill of readdirSync(child)) record(join(child, skill));
+      const skills = entry === 'skills' && isDirectory(child) ? readDirectory(child) : null;
+      if (skills) {
+        for (const skill of skills) record(join(child, skill));
       } else {
         record(child);
       }
