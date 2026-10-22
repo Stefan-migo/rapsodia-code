@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { step, info, success, warn, error, heading } from '../utils/logger';
-import { hashFile, collectFiles, projectTemplateFile } from '../engine/template';
+import { hashFile, projectTemplateFile } from '../engine/template';
 import { detectChanges, Manifest, normalizeManifestPath, templateOptionsFromManifest } from '../engine/manifest';
 import * as readline from 'readline';
 import { resolveStatePath } from '../utils/state';
@@ -33,35 +33,6 @@ function promptYesNo(question: string): Promise<boolean> {
       resolve(answer.trim().toLowerCase() === 'y' || answer.trim().toLowerCase() === 'yes');
     });
   });
-}
-
-function showDiff(projectPath: string, templatePath: string): void {
-  const projectContent = existsSync(projectPath) ? readFileSync(projectPath, 'utf-8') : '';
-  const templateContent = readFileSync(templatePath, 'utf-8');
-
-  const projectLines = projectContent.split('\n');
-  const templateLines = templateContent.split('\n');
-
-  const maxLines = Math.max(projectLines.length, templateLines.length);
-  let diffCount = 0;
-
-  for (let i = 0; i < maxLines; i++) {
-    if (projectLines[i] !== templateLines[i]) {
-      if (diffCount < 10) {
-        if (i < projectLines.length) {
-          console.log(`  -${projectLines[i]}`);
-        }
-        if (i < templateLines.length) {
-          console.log(`  +${templateLines[i]}`);
-        }
-      }
-      diffCount++;
-    }
-  }
-
-  if (diffCount > 10) {
-    info(`... and ${diffCount - 10} more differences`);
-  }
 }
 
 export async function updateCommand(options: UpdateOptions): Promise<void> {
@@ -110,15 +81,17 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
       warn(`${changes.userModified.length} file(s) modified by user need review`);
     }
     if (changes.deleted.length > 0) {
-      warn(`${changes.deleted.length} file(s) removed from template (not deleted from project)`);
+      warn(`Migration plan: ${changes.deleted.length} path(s) are no longer shipped. Rapsodia never deletes them; they are safe to remove once the project no longer uses OpenCode.`);
     }
-    if (changes.added.length === 0 && changes.modified.length === 0 && changes.userModified.length === 0) {
+    if (changes.added.length === 0 && changes.modified.length === 0 && changes.userModified.length === 0 && changes.deleted.length === 0) {
       success('Template is up to date');
     }
     return;
   }
 
-  if (changes.added.length === 0 && changes.modified.length === 0 && changes.userModified.length === 0) {
+  // `deleted` counts: a project whose only difference is retired paths still has a migration plan
+  // to show, and reporting "up to date" would hide it.
+  if (changes.added.length === 0 && changes.modified.length === 0 && changes.userModified.length === 0 && changes.deleted.length === 0) {
     success('Template is already up to date');
     return;
   }
@@ -147,9 +120,10 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   }
 
   if (changes.deleted.length > 0) {
-    warn(`Removed from template (${changes.deleted.length}):`);
+    warn(`Migration plan — no longer shipped (${changes.deleted.length}):`);
+    warn('Rapsodia never deletes these paths. They are safe to remove once the project no longer uses OpenCode.');
     for (const f of changes.deleted) {
-      warn(`  - ${f} (not deleted from project)`);
+      warn(`  - ${f}`);
     }
   }
 
@@ -167,8 +141,6 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     added: [],
     errors: [],
   };
-
-  const templateFiles = collectFiles(TEMPLATE_DIR, TEMPLATE_DIR);
 
   for (const file of changes.modified) {
     const templatePath = join(TEMPLATE_DIR, file);
