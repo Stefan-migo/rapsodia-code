@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, relative, basename, extname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, lstatSync, readdirSync, statSync } from 'fs';
+import { join, relative, basename, extname, sep } from 'path';
 import { createHash } from 'crypto';
 import { PROJECT_STATE_DIR_NAME } from '../utils/state';
 import { pythonCommand } from '../utils/exec';
@@ -69,8 +69,30 @@ export function collectFiles(dir: string, baseDir: string): string[] {
   return files;
 }
 
-export function copyTemplate(targetDir: string, options: TemplateOptions): string[] {
-  const copiedFiles: string[] = [];
+/**
+ * `mkdirSync` and `writeFileSync` follow symlinks, so a link planted inside the target directory
+ * would redirect a template write outside it. A template write is never worth that: refuse the
+ * path and report it instead.
+ */
+function staysInsideTarget(targetDir: string, targetPath: string): boolean {
+  const relativePath = relative(targetDir, targetPath);
+  if (relativePath === '' || relativePath.startsWith('..')) return false;
+  let current = targetDir;
+  for (const part of relativePath.split(sep)) {
+    current = join(current, part);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return false;
+    } catch {
+      // The component does not exist yet, so neither do the ones below it.
+      return true;
+    }
+  }
+  return true;
+}
+
+export function copyTemplate(targetDir: string, options: TemplateOptions): { copied: string[]; refused: string[] } {
+  const copied: string[] = [];
+  const refused: string[] = [];
   const allFiles = collectFiles(TEMPLATE_DIR, TEMPLATE_DIR);
 
   for (const file of allFiles) {
@@ -78,14 +100,19 @@ export function copyTemplate(targetDir: string, options: TemplateOptions): strin
     const targetPath = join(targetDir, file);
     const targetParent = join(targetPath, '..');
 
+    if (!staysInsideTarget(targetDir, targetPath)) {
+      refused.push(file);
+      continue;
+    }
+
     mkdirSync(targetParent, { recursive: true });
 
     writeFileSync(targetPath, projectTemplateFile(sourcePath, options));
 
-    copiedFiles.push(file);
+    copied.push(file);
   }
 
-  return copiedFiles;
+  return { copied, refused };
 }
 
 export function hashFile(filePath: string): string {

@@ -43,10 +43,12 @@ export async function initCommand(name: string, options: InitOptions): Promise<v
 
   if (existsSync(targetDir)) {
     if (!options.force) {
-      error(`Directory "${name}" already exists. Use --force to overwrite.`);
+      error(`Directory "${name}" already exists. Use --force to write the template into it.`);
       process.exit(1);
     }
-    warn(`Directory "${name}" already exists. Overwriting...`);
+    // `--force` copies the template over the directory and recreates `.git`; it does not clear
+    // files the template never shipped, so the message must not promise an overwrite.
+    warn(`Directory "${name}" already exists. Writing the template over it: template files are replaced, other files are kept, and .git is recreated.`);
     // Remove stale .git so git init works cleanly
     const oldGitDir = join(targetDir, '.git');
     if (existsSync(oldGitDir)) {
@@ -66,11 +68,12 @@ export async function initCommand(name: string, options: InitOptions): Promise<v
   };
 
   step('Copying template files');
-  const copiedFiles = copyTemplate(targetDir, templateOptions);
+  const { copied, refused } = copyTemplate(targetDir, templateOptions);
   // npm never publishes a file named `.gitignore`, so no template can carry one and the CLI writes
   // them here. See engine/gitignore.ts for why the content lives in code.
   const writtenIgnores = writeProjectIgnores(targetDir);
-  success(`Copied ${copiedFiles.length + writtenIgnores.length} files`);
+  success(`Copied ${copied.length + writtenIgnores.length} files`);
+  for (const file of refused) warn(`Refused to write ${file}: a symlink would send it outside the project.`);
 
   step('Generating manifest');
   generateManifest(targetDir, templateOptions);
