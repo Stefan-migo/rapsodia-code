@@ -20,6 +20,43 @@ export const NEVER_PATHS = ['DESIGN.md', 'SYSTEM-MAP.md', 'USER-GUIDE.md', 'wiki
 /** The pre-Pi surface Rapsodia wrote or depended on. It is reported, never deleted. */
 const RETIRED_ROOTS = ['.opencode', 'openspec', 'opencode.json', 'scripts/setup.sh'];
 
+/**
+ * Paths the pack itself put in a project, whatever the manifest of the version that created it
+ * happened to record. A project adopted at 1.0.0 and synced by later versions carries pack files the
+ * manifest never saw, and reporting those as the project's own asked the human to re-decide things
+ * the pack already decided. A name is evidence, not proof, and nothing here deletes anything.
+ */
+const PACK_PATHS = [
+  '.opencode/.gitignore',
+  '.opencode/agents',
+  '.opencode/commands',
+  '.opencode/mcp-template.json',
+  '.opencode/node_modules',
+  '.opencode/opencode.json',
+  '.opencode/package.json',
+  '.opencode/package-lock.json',
+  '.opencode/plugins',
+  '.opencode/skills',
+  '.opencode/tools',
+  'opencode.json',
+  'scripts/setup.sh',
+];
+
+/** Skills the pack shipped. A project skill carrying one of these names is still only reported. */
+const PACK_SKILLS = [
+  'bootstrap',
+  'design-system',
+  'graphify',
+  'ponytail-audit',
+  'ponytail-debt',
+  'ponytail-help',
+  'ponytail-plan',
+  'ponytail-review',
+  'rapso-persona',
+  'rapso-session',
+  'sdd',
+];
+
 /** Adopted projects may already carry this heading; matching it avoids duplicate defect sections. */
 const LEGACY_DEFECT_HEADING = '## Reporting Cortex Defects';
 
@@ -52,10 +89,11 @@ function isOwned(path: string): boolean { return OWNED_PATHS.some((pattern) => m
 
 /**
  * Report the retired surface one entry at a time, classified by whether Rapsodia ever wrote inside
- * it. A directory holding any manifest-recorded file is `removed`: the human can delete it once the
- * project no longer uses OpenCode. Everything else is `leftover`: the project's own content, such as
- * a skill it added under `.opencode/skills`, which no flag may touch. Nothing here deletes anything,
- * and the plan stays one line per entry so it remains readable on a project with a large tree.
+ * it: a manifest-recorded file, a path the pack shipped, or a pack skill name. Those entries are
+ * `removed`, and the human can delete them once the project no longer uses OpenCode. Everything else
+ * is `leftover`: the project's own content, such as a skill it added under `.opencode/skills`, which
+ * no flag may touch. Nothing here deletes anything, and the plan stays one line per entry so it
+ * remains readable on a project with a large tree.
  */
 function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): { removed: string[]; leftover: string[] } {
   const removed: string[] = [];
@@ -100,8 +138,15 @@ function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): 
     return false;
   };
 
+  const isPackEntry = (path: string): boolean => {
+    if (PACK_PATHS.includes(path)) return true;
+    const skillPrefix = '.opencode/skills/';
+    return path.startsWith(skillPrefix) && PACK_SKILLS.includes(path.slice(skillPrefix.length));
+  };
+
   const record = (absolute: string): void => {
-    (holdsRecordedFile(absolute) ? removed : leftover).push(normalized(absolute));
+    const path = normalized(absolute);
+    (isPackEntry(path) || holdsRecordedFile(absolute) ? removed : leftover).push(path);
   };
 
   for (const root of RETIRED_ROOTS) {
