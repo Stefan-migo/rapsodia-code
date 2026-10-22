@@ -41,6 +41,7 @@ interface StatusReport {
 
 function calculateDuration(startedAt: string): string {
   const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return 'unknown';
   const diff = Date.now() - start;
   const hours = Math.floor(diff / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
@@ -101,11 +102,15 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
     const sessionPath = resolveStatePath(projectDir, 'session.json');
     if (sessionPath && existsSync(sessionPath)) {
       try {
-        const session = JSON.parse(readFileSync(sessionPath, 'utf-8'));
-        report.session.active = true;
-        report.session.sessionId = session.sessionId;
-        report.session.startedAt = session.startedAt;
-        report.session.duration = calculateDuration(session.startedAt);
+        const session = JSON.parse(readFileSync(sessionPath, 'utf-8')) as Record<string, unknown>;
+        const sessionId = session.sessionId;
+        const startedAt = session.startedAt;
+        if (typeof sessionId === 'string' && typeof startedAt === 'string' && !Number.isNaN(Date.parse(startedAt))) {
+          report.session.active = true;
+          report.session.sessionId = sessionId;
+          report.session.startedAt = startedAt;
+          report.session.duration = calculateDuration(startedAt);
+        }
       } catch {}
     }
 
