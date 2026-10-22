@@ -33,7 +33,7 @@ program
 
 program
   .command('install')
-  .description('Check and install dependencies')
+  .description('Check dependencies and print installation steps')
   .option('--check', 'check only, do not install')
   .action(async (options) => {
     await installCommand(options);
