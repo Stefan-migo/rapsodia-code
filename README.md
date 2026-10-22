@@ -55,7 +55,7 @@ rapso adopt --yes
 - Optional project MCP servers can be configured in `.pi/mcp.json`; this too requires project trust.
 - `.rapsodia-code/` contains local ignored state, including the prepared-context record and prelude.
 
-The `rapsodia-context` extension refreshes the prelude in the background when a Pi session starts if the existing prelude is at least five minutes old or missing. The refresh has a 60-second timeout. It stays quiet if `rapso` is unavailable or is too old to recognize `rapso context`. On the first user run of a session, it adds a `rapso_context` prompt section pointing Pi to the prelude. Without project trust, the extension does not load; follow the prelude-reading rule in `AGENTS.md` instead.
+The `rapsodia-context` extension refreshes the prelude in the background when a Pi session starts if the existing prelude is at least five minutes old or missing. The refresh has a 60-second timeout. It stays quiet if `rapso` is unavailable or is too old to recognize `rapso context`. On the first user run of a session, it adds a `rapso_context` prompt section pointing Pi to the prelude. Without project trust, the extension does not load; follow the prelude-reading rule in `AGENTS.md` instead. Set `RAPSO_BIN` when `rapso` is not the command that should run (a local build, a shim, or a native executable on Windows).
 
 `gentle-engram` owns Engram session start, summaries, and passive capture. Rapsodia reads Engram context when building the prelude; `rapso start` and `rapso close` do not start or end an Engram session. Graphify remains the code graph; refresh it with `graphify . --update`. An optional Graphify MCP server can be configured in `.pi/mcp.json`.
 
