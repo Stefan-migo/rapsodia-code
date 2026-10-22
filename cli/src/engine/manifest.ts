@@ -28,9 +28,9 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
     path: relative(targetDir, fp).replace(/\\/g, '/'),
     hash: hashFile(fp),
   })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/')
-    // `init` writes the ignore files itself and npm never publishes a file named `.gitignore`,
-    // so tracking them can only ever report them as removed from the template.
-    && f.path !== '.gitignore' && f.path !== '.opencode/.gitignore');
+    // `init` writes the ignore file itself and npm never publishes a file named `.gitignore`,
+    // so tracking it can only ever report it as removed from the template.
+    && f.path !== '.gitignore');
 
   const manifest: Manifest = {
     templateVersion: CLI_VERSION,
@@ -73,7 +73,7 @@ export function detectChanges(
 ): { added: string[]; modified: string[]; userModified: string[]; deleted: string[] } {
   const excludedPaths = manifest.excludedPaths || [];
   const adoptedMergedPaths = manifest.excludedPaths && manifest.excludedPaths.length > 0
-    ? ['AGENTS.md', '.gitignore', 'opencode.json', '.opencode/opencode.json', '.opencode/templates/**']
+    ? ['AGENTS.md', '.gitignore']
     : [];
   const ignoredPaths = [...excludedPaths, ...adoptedMergedPaths];
   const templateFiles = collectFiles(templateDir, templateDir).filter((file) => !ignoredPaths.some((pattern) => {
