@@ -117,5 +117,5 @@ export async function initCommand(name: string, options: InitOptions): Promise<v
   info('Next steps:');
   info(`  cd ${name}`);
   info('  rapso install     # Check and install dependencies');
-  info('  opencode          # Launch the agent');
+  info('  gentle-shell      # Launch the agent');
 }
