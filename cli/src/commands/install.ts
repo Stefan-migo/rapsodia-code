@@ -32,16 +32,16 @@ export async function installCommand(options: InstallOptions): Promise<void> {
   }
 
   if (allOk) {
-    info('Everything looks good. Run `opencode` to start.');
+    info('Everything looks good. Run `gentle-shell` to start.');
     return;
   }
 
   if (options.check) {
-    info('Run `rapso install` (without --check) to attempt installation.');
+    info('Run `rapso install` (without --check) to print the installation steps.');
     return;
   }
 
-  heading('Installing Missing Dependencies');
+  heading('Missing Dependencies — Installation Steps');
 
   for (const dep of deps) {
     if (dep.installed) continue;

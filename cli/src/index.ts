@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { initCommand } from './commands/init';
 import { installCommand } from './commands/install';
 import { startCommand } from './commands/start';
+import { contextCommand } from './commands/context';
 import { closeCommand } from './commands/close';
 import { statusCommand } from './commands/status';
 import { updateCommand } from './commands/update';
@@ -33,7 +34,7 @@ program
 
 program
   .command('install')
-  .description('Check and install dependencies')
+  .description('Check dependencies and print installation steps')
   .option('--check', 'check only, do not install')
   .action(async (options) => {
     await installCommand(options);
@@ -41,17 +42,25 @@ program
 
 program
   .command('start')
-  .description('Start a session: load context and launch opencode')
+  .description('Prepare the project context (prelude), optionally launching the agent')
   .option('--no-prelude', 'skip context pre-load')
-  .option('--no-open', 'prepare session without launching opencode')
-  .option('--dry-run', 'show what would happen without launching')
+  .option('--run', 'launch the agent after preparing (RAPSO_AGENT, default gentle-shell)')
+  .option('--dry-run', 'show what would happen without writing')
   .action(async (options) => {
     await startCommand(options);
   });
 
 program
+  .command('context')
+  .description('Build the project context prelude without preparing a session or launching an agent')
+  .option('--dry-run', 'show what would happen without writing')
+  .action(async (options) => {
+    await contextCommand(options);
+  });
+
+program
   .command('close')
-  .description('Close a session: summarize, export, cleanup')
+  .description('Export the wiki, clean up the prepared context, and generate a retrospective')
   .option('--message <text>', 'session summary text')
   .option('--no-export', 'skip wiki export')
   .option('--retrospective', 'generate session retrospective')

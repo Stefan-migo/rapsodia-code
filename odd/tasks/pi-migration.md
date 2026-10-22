@@ -1,0 +1,312 @@
+# pi-migration
+
+Feature branch `odd/pi-migration`. Worktree `../rapsodia-code-odd-pi-migration`.
+Proposal and evidence: `docs/pi-migration.md` (read it before any task).
+P1, P2, P3, P4, and P5 are delivered on this branch. The branch is ready for the human's push and
+PR decision.
+
+## Specs
+
+- **S1 — Agent retirement.** The human's words: "esos agentes rapsodia-planner, rapsodia-developer ya no lo necesitamos. trabajamos con el orchestrator de gentle ai. asi que deberiamos removerlos."
+- **S2 — Ponytail retirement.** "tambien lo mismo con ponytail. paso su tiempo no es necesario tenerlo ahora."
+- **S3 — Capability review and Pi configuration.** "primero necesito que me des un overview de cuales son las capacidades de rapsodia-code. y evaluar cual se queda cual se va. ademas de configurar rapsodia code para pi(gentle shell)"
+- **S4 — Proposal only first.** Selected option: "Solo la propuesta escrita, no toques nada". The decision document is `docs/pi-migration.md`.
+- **S5 — SDD retirement.** Selected option: "Se va completo".
+- **S6 — Persona retirement.** "igual creo que se va eventualmente crearemos una nueva persona en gentle shell directo", after asking what `rapso-persona` contains. No Rapsodia persona survives.
+- **S7 — Session ownership.** "aqui creo que seria interesante que la sesion se carge cuando abro gentle shell. actualmente no utilizao el cli de rapsodia code para iniciar. simplemente abro opencode y rapsodiacode esta considerado en el flujo. me gustaria que fuera mas o menos lo mismo pero con gentle shell". `rapso` must not launch an agent. Prelude loads on session start.
+- **S8 — P1 is the current milestone.** "ok vamos con P1". P1 is repository dogfood only: no `cli/src` changes.
+- **S9 — P1 execution decisions.** Worktree: "Sí, con rapso worktree create pi-migration". `openspec/`: "Empaquetar en tar y borrar" — archive to `docs/archive/openspec-2026-10.tar.gz`, then remove the directory.
+- **S10 — P4 mechanism.** Selected options: "B — extensión de proyecto (la shippea el template)" for loading the prelude, and "Sí, agregar `rapso context`" for the command. The extension ships in `.pi/extensions/`, refreshes the prelude in the background on `session_start`, and calls `rapso context`; project trust is required before Pi loads it, so the `AGENTS.md` rule stays as the fallback.
+
+## Tasks
+
+P1 only. Commit is recorded after the work unit lands.
+
+| ID | Spec | Task | Route | Commit |
+|----|------|------|-------|--------|
+| T1 | S4, S8 | Write the feature document and carry the proposal into the branch | inline | `191518c` |
+| T2 | S5, S9 | Archive `openspec/` to `docs/archive/openspec-2026-10.tar.gz` and delete the directory | inline | `a208433` (+ `diff -r` verification) |
+| T3 | S1 | Remove `.opencode/agents/rapso-*.md` and the `agent` entries in `opencode.json` | inline | `c8f19c0`, `ad1b5ca` |
+| T3b | S1 | Remove the OpenCode tool and plugin surface (`tools/*`, `plugins/graphify.js`) | inline | `766dc92` |
+| T4 | S2 | Remove the Ponytail pack: `.opencode` symlinks, `skills/ponytail-plan`, the `AGENTS.md` section | inline | `8c6adf3`, `f876c38` |
+| T5 | S5 | Remove `.opencode/skills/{sdd,graphify}` and every `/sdd-*` reference in `AGENTS.md` | inline | `8c6adf3`, `f876c38` |
+| T6 | S3, S6 | Remove `bootstrap` (OpenCode/GSD-bound) and retire the `rapso-persona` symlink | inline | `8c6adf3`, `e1cad81` |
+| T7 | S3 | Move `design-system` to `.agents/skills/` and retarget its frontmatter to Pi | inline | `e1cad81` |
+| T8 | S3, S7 | Rewrite `AGENTS.md` for Pi: drop identities, Ponytail, SDD, and the OpenCode MCP table; add the prelude rule, Pi resource locations, and CLI `graphify` in the gate | inline | `f876c38` |
+| T9 | S8 | Verify P1 (no forbidden references, clean tree, graph check) and record the commits in this table | inline | this document's commit (evidence below) |
+| T10 | S1 | Stop merging OpenCode config in `adopt`; share the options contract | inline | `4bb29bf`, `3393682` |
+| T11 | S1 | Drop retired paths from manifest ownership and managed ignores; fix duplicate-block handling | inline | `00ea789` |
+| T12 | S1 | Provision worktrees from `.agents/skills` | inline | `352723a` |
+| T13 | S3 | Share the python fallback and reject executable directories | inline | `4343c87` |
+| T14 | S3 | Retarget the post-init hint | inline | `38fad1d` |
+| T15 | S3 | Move `rapso-session` and `design-system` to `.agents/skills` with Pi frontmatter | inline | `dc682cd` |
+| T16 | S3 | Rewrite the template `AGENTS.md` | inline | `db0bf1b`, `1641d45` |
+| T17 | S2, S5 | Retire the agent/command surface, custom tools, config, graphify plugin, ponytail pack, bootstrap/graphify/persona skills, and `setup.sh` | inline | `d4f8f1c`, `d99d4e4`, `9ac8d1e`, `c5fc20d`, `21ab933`, `b2176bd`, `c3ca89c` |
+| T18 | S3 | Adapt `install-deps.sh` and `rapso-sync.sh` | inline | `b0f4c5a`, `259ec41` |
+| T19 | S8 | Verify P2 and record the evidence | inline | this document's commit (evidence below) |
+| T20 | S7 | `start` prepares local context (no Engram session); `--run` launches `RAPSO_AGENT` (default `gentle-shell`) | inline | `0d5b29b` |
+| T21 | S7 | `close` exports the wiki, cleans the prepared context, and writes the retrospective without MCP or `opencode.json` | inline | `0d5b29b` |
+| T22 | S3 | `status` reports the prepared context and the Pi agent | inline | `ddfca24` |
+| T23 | S3 | `install` and command help describe the Pi runtime truthfully | inline | `316fb2b`, `0b8e41d` |
+| T24 | S7 | gga fixes: honest export outcome, dry-run purity, malformed record, finalization wording, skipped prelude | inline | `8b206b8`, `3e5863c`, `5a4c6e3`, `c503a97`, `b153786` |
+| T25 | S8 | Verify P3 and refresh the graph | inline | this document's commit (evidence below) |
+| T26 | S7, S10 | `rapso context`: build the prelude only (no prepared-context id, no `session.json`, no agent), with `--dry-run` | inline | `60ddff3` |
+| T27 | S7 | Write the prelude atomically so a background refresh never exposes a torn file to the reader | inline | `00db23e` (+ `09a9f4e` for the partial-graphify warning gga found) |
+| T28 | S7, S10 | Ship the `rapsodia-context` Pi project extension: refresh the prelude in the background on `session_start`, point the first run at it from `before_agent_start`, fail soft | inline | `3567ff1` |
+| T29 | S7, S10 | Wire the extension into `init`/`adopt` ownership and the `AGENTS.md` prelude rule (root and template) | inline | `513e8b1`, `f7c1a02` |
+| T30 | S8 | Verify P4 and record the evidence | inline | this document's commit (evidence below) |
+| T31 | S3 | `adopt`: fill the retirement plan for the OpenCode surface instead of leaving `Removed`/`Leftover` empty; never delete a user file | worker | `1433e1b`, `7a0b2d2`, `f46ed18`, `435afab`, `c0c73e1` |
+| T32 | S3 | `update`: report the retired template paths as a migration plan and say which are safe to remove | worker | `32b0edc` (+ `6ab9b00` for the unrecorded-file safety fix) |
+| T33 | S3 | `adopt --force` and `update --force` name every file they overwrite | worker | `1433e1b` (`update` already named them) |
+| T34 | S3 | `init --force`: make the warning match what it does (copy over the directory, remove only `.git`) | inline | `b86bad4` |
+| T35 | S3 | `scripts/rapso-sync.sh`: provision `.pi/extensions/rapsodia-context.ts` with the skills | inline | `90a1b62` |
+| T36 | S3 | Docs: `README.md`, template `USER-GUIDE.md` and `SYSTEM-MAP.md` describe the Pi surface, the `context` command, and the retired OpenCode surface | worker | `69487e7` |
+| T37 | S3 | Bump the CLI to 1.1.0 and rebuild `cli/dist` | inline | `c1185f1` |
+| T38 | S8 | Verify P5 against a 1.0.0-shaped and a 1.0.3-shaped consumer and record the evidence | inline | this document's commit (evidence below) |
+
+## Verification
+
+Run inside `../rapsodia-code-odd-pi-migration` on branch `odd/pi-migration`.
+
+1. Retired surface is gone:
+
+   ```
+   $ for p in .opencode opencode.json skills/ponytail-plan openspec; do [ -e "$p" ] && echo "PRESENT: $p" || echo "absent: $p"; done
+   absent: .opencode
+   absent: opencode.json
+   absent: skills/ponytail-plan
+   absent: openspec
+   ```
+
+2. The three headings `engine/adopt.ts` extracts by exact text still exist in `AGENTS.md`:
+
+   ```
+   $ grep -n "^## ODD Worktrees\|^## Reporting Rapsodia Defects\|^### 5-Step Execution Gate (MANDATORY)" AGENTS.md
+   83:### 5-Step Execution Gate (MANDATORY)
+   150:## ODD Worktrees
+   178:## Reporting Rapsodia Defects
+   ```
+
+3. Typecheck still passes (proves the branch state builds; no TypeScript changed in P1):
+
+   ```
+   $ cd cli && npm run typecheck
+   > tsc --noEmit
+   (exit 0)
+   ```
+
+4. The graph still builds after 49 source files were deleted:
+
+   ```
+   $ graphify . --update
+   [graphify extract] Pruned 297 node(s) from 49 deleted or excluded source file(s).
+   [graphify extract] wrote graphify-out/graph.json: 863 nodes, 1395 edges, 90 communities
+   (exit 0)
+   ```
+   `graphify-out/` is gitignored; the authoritative graph in the main worktree is refreshed after
+   the merge, not from this branch.
+
+5. Live references to retired surface, excluding historical records and P2 scope. The search covered
+tracked files minus `cli/src/template/**` (P2), `odd/tasks/**` (past ODD records), `wiki/**`
+(generated snapshot), `README.md` and `docs/COMPETITIVE-ANALYSIS.md` (P5 docs) and
+`docs/pi-migration.md` (the proposal names what it retires). One live hit remained:
+`scripts/rapso-sync.sh:47` lists the retired pack skills. It reads them from
+`cli/src/template/.opencode/skills`, which P1 does not touch, so rewriting it now would break it
+before P2 exists. Recorded as a P2 follow-up below.
+
+6. Working tree clean after the last commit:
+
+   ```
+   $ git status
+   On branch odd/pi-migration
+   nothing to commit, working tree clean
+   ```
+
+### P2 — template port
+
+Run from the worktree after `npm run build`.
+
+1. `npm run typecheck` from `cli/`: `tsc --noEmit`, exit 0.
+2. `npm run build`: `node esbuild.config.js`, exit 0.
+3. `init` into a fresh scratch directory:
+
+   ```
+   $ node cli/dist/index.js init demo-pi --no-git --yes
+   OK .agents/skills/rapso-session/SKILL.md
+   OK .agents/skills/design-system/SKILL.md
+   absent .opencode
+   absent opencode.json
+   absent scripts/setup.sh
+   headings=3
+   Ponytail=0  rapso-planner=0  execute_script=0  /sdd-new=0
+   ```
+
+4. `adopt --dry-run` on a fake legacy consumer (project `AGENTS.md` section, `opencode.json` with a
+   cortex-managed `rapso-planner` plus an unrelated agent, `.opencode/agents/rapso-planner.md`,
+   `.opencode/skills/bootstrap/SKILL.md`):
+
+   ```
+   Created (2): .agents/skills/design-system/SKILL.md, .agents/skills/rapso-session/SKILL.md
+   Injected (2): AGENTS.md, .gitignore
+   Seeded (3): .rapsodia-code/sessions/.gitignore, odd/tasks/.gitkeep, .rapsodia-code/manifest.json
+   opencode.json untouched by dry run: YES
+   ```
+
+   After `adopt --yes`: `opencode.json` unchanged, the project's `## Rules` section kept, the three
+   headings injected once, both skills present.
+
+5. `bash -n scripts/rapso-sync.sh` → exit 0. `shellcheck` is not installed, so this is the check
+   actually run.
+
+### P3 — CLI session surface
+
+Run from the worktree after `npm run build`.
+
+1. `npm run typecheck` from `cli/`: `tsc --noEmit`, exit 0. `npm run build`: exit 0.
+2. `rapso start --help` lists `--no-prelude`, `--run`, `--dry-run`; `--no-open` is gone.
+3. `rapso start --dry-run` prints no context id and performs no migration or write.
+4. `rapso start --no-prelude` writes `.rapsodia-code/session.json`, builds no prelude, launches no
+   agent, and prints no "read the prelude" instruction.
+5. `rapso start` builds `.rapsodia-code/prelude.md`; `rapso start --run` with `RAPSO_AGENT=true`
+   launches the binary and exits 0 with `true completed`.
+6. `rapso close` with no prepared context exits 0, exports the wiki, and reports nothing to clean.
+   `rapso close --message "..." --retrospective` removes `session.json`, writes
+   `.rapsodia-code/retrospectives/<date>-<label>.md`, and the file carries the project name and the
+   message.
+7. `rapso status` reports `Context: — (none prepared)` after close, `Agent: ✅ gentle-shell 4.3.0`,
+   and an honest `Engram: ⚠️ Not connected` line.
+8. `graphify . --update` after the refactor: 22 deleted sources pruned, graph rebuilt, exit 0.
+   `graphify-out/` is gitignored; the authoritative graph is refreshed after the merge.
+
+### P4 — session integration
+
+Run from the worktree after `npm run build`.
+
+1. `npm run typecheck` from `cli/`: `tsc --noEmit`, exit 0. `npm run build`: exit 0.
+2. `rapso context --dry-run` in a fresh `init` project prints the plan and writes nothing; the state
+   directory still holds only `manifest.json`.
+3. `rapso context` writes `.rapsodia-code/prelude.md` and nothing else: no `session.json`, no
+   prepared-context id, no agent. Real output: `⚠ Graphify report not found`, `ℹ Project manifest
+   loaded`, `ℹ Engram context loaded via MCP`, `✔ Prelude ready: .rapsodia-code/prelude.md`, exit 0,
+   ~0.5s. No `.tmp` file is left behind (the prelude is renamed into place).
+4. The extension's own contract, verified with a throwaway harness in `mktemp -d` (esbuild-transpiled
+   file, stub `pi`/`ctx`, never committed because the repository has no test harness). Eight
+   scenarios pass: a stale prelude spawns exactly one `rapso context` with `cwd` at the project root
+   and a 60s timeout; the first user run receives a `rapsodia_context` section and later or
+   custom-message runs do not; a prelude younger than five minutes spawns nothing; a project without
+   `.rapsodia-code` does nothing; a nested directory resolves the owning project root; a missing
+   `rapso` stays silent and still points at the stale prelude; a CLI that predates `context` stays
+   silent; a real failure notifies once with a bounded message that never echoes raw stderr.
+5. Real Pi run, in a project generated by the new `init`, with the extension in `.pi/extensions/`
+   and a logging `rapso` shim first on `PATH`:
+
+   ```
+   $ PATH=<shim>:$PATH gentle-shell -- --approve --no-session -p "Reply with the single word ok."
+   ok
+   $ cat shim.log
+   argv: context | cwd: /tmp/…/demo2
+   ```
+
+   The prelude was written by that run. A second run with `--mode json` carries the section
+   `Project prelude: \`.rapsodia-code/prelude.md\` (last refreshed just now)` in the transcript, and
+   the shim log still holds one line, so the five-minute guard held.
+6. `init demo --no-git --yes` copies 20 files and ships `.pi/extensions/rapsodia-context.ts`.
+7. `adopt --dry-run` on a legacy consumer reports `Created (3)` including
+   `.pi/extensions/rapsodia-context.ts`, leaves `opencode.json` untouched, and the real `adopt --yes`
+   creates the same three files.
+8. Differential check against the pre-P4 base `2d1869f` (archive in `mktemp -d`, its own build,
+   identical fixtures, stdout+stderr+exit compared): every difference is the requested one —
+   `Copied 19 → 20 files`, template tracked files `18 → 19`, adopt `Created 2 → 3`. `start --dry-run`,
+   `start --no-prelude`, `start` (with prelude), and `status` are otherwise identical, and the
+   prelude content is identical modulo timestamps.
+9. `graphify . --update`: 9 sources re-extracted, 0 deleted, exit 0. `graphify-out/` is gitignored;
+   the authoritative graph is refreshed after the merge.
+
+### P5 — consumer migration and docs
+
+Run from the worktree after `npm run build` (now `1.1.0`).
+
+1. `npm run typecheck` and `npm run build`: exit 0.
+2. A 1.0.0-shaped consumer (manifest records the retired `.opencode` files) with `adopt --dry-run`:
+   `Created (3)` (both `.agents/skills` and `.pi/extensions/rapsodia-context.ts`), `Removed (8)` for
+   the entries Rapsodia wrote (`.opencode/agents`, `.opencode/plugins`, the five retired skills,
+   `.opencode/tools`), `Leftover (4)` for `.opencode/skills/component-adapter`, `opencode.json`,
+   `openspec` and `scripts/setup.sh`. The real `adopt --yes` creates the same three files and deletes
+   nothing: `.opencode`, `openspec`, `opencode.json` and `scripts/setup.sh` are all still there.
+3. Symlinks and unreadable directories: a `.opencode/skills` symlink to an ancestor, a symlink to
+   `/etc`, a dangling `.opencode`/`openspec` symlink, and a `chmod 000` skills directory each produce
+   one reported entry and exit 0 — no recursion, no traversal outside the project, no crash.
+4. `adopt --force` on a conflicting owned file: the dry run reports `Conflicting (1)` and claims no
+   overwrite; the forced run reports `Overwritten (1)` plus `File was overwritten: <path>`.
+5. `update --check` and `update --dry-run` on the 1.0.0 consumer: `Migration plan: 9 path(s) are no
+   longer shipped`, then the same plan as a list. A project whose only difference is a retired path
+   no longer reports "up to date". `AGENTS.md` is now classified `User-modified` instead of
+   `New files`, so `update` cannot overwrite a project file the manifest never recorded without
+   `--force` or an explicit prompt.
+6. A 1.0.3-shaped consumer: `update --check` reports 1 new file
+   (`.pi/extensions/rapsodia-context.ts`) and 3 auto-updatable template docs.
+7. `init --force` into a directory holding a `wiki` symlink: the warning matches the behaviour
+   (template files replaced, other files kept, `.git` recreated), 10 files are copied, the 10
+   symlink-routed paths are refused by name, and nothing is written outside the directory.
+8. `scripts/rapso-sync.sh`: dry run, real run and a second idempotent run against a scratch project —
+   the two skills and `.pi/extensions/rapsodia-context.ts` are provisioned, and the script now reaches
+   `repair_agents` and `migrate_sessions` (before this fix a failing `[[ ]] && echo` in `sync_skills`
+   made it return 1, and `set -e` aborted the whole run).
+9. Differential against the pre-P5 base `0dfa397` (its own build, identical fixtures): `update`
+   differs only by `AGENTS.md` moving from `New files` to `User-modified` and the retired block
+   becoming a migration plan; `init` is identical apart from the fixture path.
+10. `graphify . --update` after the code changes; `graphify-out/` is gitignored and refreshed again
+    after the merge.
+
+### Review slice
+
+P1 landed 9 commits and ~1625 authored changed lines. P2 added 19 commits and roughly 1690 more.
+P3 added 10 commits and roughly 140 more. P4 added 8 commits and roughly 200 more. P5 added 12
+commits and roughly 450 more. Cumulatively the branch is ~4450 authored lines across 60 commits. That is past the ~400-line review slice. The delivery strategy for a slice this size is a
+PR, and push/PR creation is the human's decision, so the boundary is recorded here and the branch
+waits for it.
+
+### Follow-ups discovered during the migration
+
+- `scripts/rapso-sync.sh` is fixed: it syncs the two surviving skills into `.agents/skills` and
+  reports retired pack skills instead of removing them. Consumer migration stays in P5.
+- `init --force` warns that it overwrites the directory but only removes `.git`, then copies the
+  template over the existing files. gga flagged the mismatch between the message and the behavior.
+  Fixing it changes destructive behavior (clear the directory vs reword the warning), so it needs a
+  human decision; not part of P2.
+- `adopt --force` overwrites a conflicting owned file without saying so; gga flagged it during P4.
+  That is the P5 risk item 1 (destructive retirement), so it stays deferred.
+- `utils/mcp.ts` is now used only by the prelude's Engram read. If P4 replaces that read with
+  `gentle-engram` tools, the MCP client can be retired.
+- `SYSTEM-MAP.md`, `USER-GUIDE.md`, and `README.md` still describe the OpenCode surface (P5).
+- `rapso update` on a project created by 1.0.3 was not exercised in P2. It will report the retired
+  template paths as deleted; migrating an already-adopted project is P5.
+- gga produced two false positives in P2: it claimed `exec.ts` used an unimported `execFileSync`
+  (the function is defined in the same file and typecheck passes) and treated a read-only review as a
+  verification gap. Treat its prose-level claims as advisory.
+- `.gga` is configured with `Provider: opencode`. `gga` still runs from the pre-commit hook, so the
+  hook depends on OpenCode being installed. That is a Pi-configuration item (P5).
+- The main worktree's `graphify-out/` still describes the pre-retirement tree until the graph is
+  refreshed after the merge.
+
+## Log
+
+- **L1** (original request, verbatim): "Hey chat. acabo de instalar gentle shell en esta laptop y me gustaria revisar algunos aspectos de rapsodia code, para hacerlo funcionar en gentle shell correctamente. ademas quiero reevaluar algunas capacidades que tiene rapsodia code. como por ejepmlo esos agentes rapsodia-planner, rapsodia-developer ya no lo necesitamos. trabajamos con el orchestrator de gentle ai. asi que deberiamos removerlos. tambien lo mismo con ponytail. paso su tiempo no es necesario tenerlo ahora. \n\nentonces primero necesito que me des un overview de cuales son las capacidades de rapsodia-code. y evaluar cual se queda cual se va. ademas de configurar rapsodia code para pi(gentle shell)"
+- **L2** (scope): selected "Solo la propuesta escrita, no toques nada". `docs/pi-migration.md` written; no code changed.
+- **L3** (SDD): selected "Se va completo".
+- **L4** (persona): "aqui necesito que me expliques que tiene el Rapso persona. para entenderlo. igual creo que se va eventualmente crearemos una nueva persona en gentle shell directo". Explained `rapso-persona`: identity, language contract, Ponytail, 5-step gate, graphify, capture rules. The operational parts are duplicated in `AGENTS.md`; the identity is what D4 retires.
+- **L5** (session): quoted verbatim in S7. Designed as: Pi extension on `session_start` refreshes `.rapsodia-code/prelude.md`; `gentle-engram` owns session lifecycle; `rapso` never launches an agent.
+- **L6** (approval): "ok vamos con P1".
+- **L7** (execution decisions): worktree "Sí, con rapso worktree create pi-migration"; `openspec/` "Empaquetar en tar y borrar".
+- **L8** (exploration correction): `bootstrap` was marked KEEP in the proposal, but reading `.opencode/skills/bootstrap/SKILL.md` shows 28 OpenCode/GSD/`.planning` references and agent-team generation. It is now DROP; `docs/pi-migration.md` was corrected before the first commit.
+- **L9** (P1 delivered): 9 commits on `odd/pi-migration` (`191518c`..`a94e272`). The four retired paths are absent, the adopt injection headings survive, `npm run typecheck` passes, and `graphify . --update` rebuilt the graph after pruning 49 deleted sources. `openspec/` was deleted in the main worktree only after `diff -r` proved the committed tar matched it. Follow-ups recorded above; none of them block P1.
+- **L10** (P2 approved and redefined): "vamos con P2". P2 was scoped as the template port plus the readers whose deletion would otherwise break the CLI, because `adopt.ts:70` read `cli/src/template/opencode.json` on every adoption. Delegated to `gentle-ai-worker`; the writer role refused deletion and commits and changed nothing, so P2 was implemented inline by the parent. Report fallback: the writer role was unusable for this unit.
+- **L11** (gga-driven fixes): gga reviewed every TypeScript commit. It found and the parent fixed: `AdoptPlan` formatting, duplicated managed blocks in `mergeGitignore`, `pythonCommand` living in one file while `resolvePythonCommand` lived in another, the duplicated `AdoptOptions` declaration, and `isFile()` accepting an executable directory. Two findings were false positives and one (`init --force`) is a pre-existing behavior change deferred to the human.
+- **L12** (P2 delivered): 19 commits (`4bb29bf`..`259ec41` plus the earlier template commits `dc682cd`, `db0bf1b`, `b0f4c5a`, `d4f8f1c`, `d99d4e4`, `9ac8d1e`, `c5fc20d`, `21ab933`, `b2176bd`, `c3ca89c`, `1641d45`). Typecheck and build pass; a fresh `init` produces no `.opencode`, no `opencode.json`, no `setup.sh`, both `.agents/skills`, and the three injectable headings; `adopt` on a legacy consumer leaves its `opencode.json` untouched and keeps its `AGENTS.md` content.
+- **L13** (P3 approved): "ok perfecto continua con P3". Decision: Pi owns the Engram session end to end. `rapso start` prepares local context only (prelude + `session.json`), `--run` becomes opt-in with `RAPSO_AGENT` (default `gentle-shell`), and `--no-open` is removed. `rapso close` keeps wiki export, cleanup, and the retrospective; it loses `mem_session_end`/`mem_session_summary` and the `opencode.json` rewrite, and it no longer requires a prepared context.
+- **L14** (gga fixes in P3): gga found and the parent fixed: `close` ignored a failed wiki export, `start --dry-run` still ran state migration (and generated the id before the dry-run branch), the retrospective asserted the graph was missing "at session start" when it was checked at finalization, a malformed `session.json` could produce `NaNm`, `install` claimed to install when it only prints instructions, and the prepare-only message pointed at a prelude skipped by `--no-prelude`. gga also suspected `pip install graphifyy`; that is the real PyPI name for the module `graphify`, so it stays.
+- **L15** (P3 delivered): 10 commits (`0d5b29b`..`b153786`). `start`/`close`/`status`/`install`/help no longer name OpenCode. Verification: typecheck and build pass; `start --dry-run` writes nothing; `start --no-prelude` writes state and no prelude; `start --run` with `RAPSO_AGENT=true` exits 0; `close` exits 0 with and without a prepared context; the retrospective carries the project and message; `status` reports the context and `gentle-shell 4.3.0`; `graphify . --update` pruned 22 deleted sources. The worktree graph was refreshed before the doc commit so later reviews read current nodes.
+- **L16** (P4 decisions, verbatim selections): "B — extensión de proyecto (la shippea el template)" and "Sí, agregar `rapso context`". The extension lives in the template at `.pi/extensions/rapsodia-context.ts`, is declared by Pi's project extensions directory rather than a settings entry, and is inert until project trust is granted; the `AGENTS.md` prelude rule remains the untrusted fallback. `rapso context` becomes the CLI entry point the extension calls, so the extension never reimplements prelude production.
+- **L17** (P4 delivered): 8 commits (`6b26bb6`..`f7c1a02`). `rapso context` builds the prelude only; `cli/src/template/.pi/extensions/rapsodia-context.ts` refreshes it on `session_start` and points the first user run at it; `buildPrelude` swaps the file in with one rename; `adopt` owns `.pi/extensions/**`; both `AGENTS.md` files lost the stale `rapso start --no-open` instruction. Verification: typecheck and build pass; `context --dry-run` writes nothing; `context` writes only the prelude; the extension passes eight stub-API scenarios in a throwaway harness; a real `gentle-shell --approve -p` run in a generated project executed `rapso context` at the project root, wrote the prelude, and carried the `rapsodia_context` section in the transcript while the five-minute guard suppressed a second refresh; `init` ships 20 files including the extension; `adopt --dry-run` reports `Created (3)` and leaves `opencode.json` alone; the differential against base `2d1869f` shows only the requested differences. gga: one real fix (raw `err.message` in a warning replaced by a bounded message), one false positive (reading our own `RAPSO_BIN` override as an ambient credential), one pre-existing `--force` overwrite-notice gap deferred to P5.
+- **L18** (P5 approved): "si continua con P5 ahora". Also decided: `lumat-agent` migrates after P5 with the fixed CLI, not before; `.gga` keeps `PROVIDER="opencode"` because gga has no `pi` provider and OpenCode is still installed, and that dependency is documented rather than removed; push/PR stays a human decision.
+- **L19** (P5 delivered): 12 commits (`2751a2e`..`c1185f1`). `adopt` now fills `Removed`/`Leftover` from the retired OpenCode surface and reports every forced overwrite; `update` describes retired paths as a migration plan and no longer treats an existing unrecorded file as new; `init --force` says what it does and refuses to write the template through a symlink; `scripts/rapso-sync.sh` provisions the Pi extension and no longer aborts before AGENTS.md repair; README, USER-GUIDE and SYSTEM-MAP describe the Pi surface; version 1.1.0. Verification: typecheck and build pass; the 1.0.0 and 1.0.3 fixtures behave as listed above; symlink, dangling-symlink and unreadable-directory cases stay contained; the differential against `0dfa397` shows only the intended differences. gga drove five real fixes on `adopt`/`update`/`init` (symlink following, dangling symlinks, unreadable directories, dead code in `update`, a wrong "up to date" report) and produced one out-of-scope finding (`copyTemplate` writing through symlinks, now fixed) plus one deferred one (`TEMPLATE_DIR` resolved from `__dirname`).

@@ -2,11 +2,15 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from '
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { execFileSync, commandAvailable } from '../utils/exec';
-import { MCPClient } from '../utils/mcp';
-import { info, success, warn, step } from '../utils/logger';
+import { success, warn } from '../utils/logger';
 import { readProjectName, resolveGraphifyPaths } from './project';
-import { stateDir, statePath, resolveStatePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
+import { stateDir, statePath, resolveStatePath, PROJECT_STATE_DIR_NAME, LEGACY_PROJECT_STATE_DIR_NAME } from '../utils/state';
 
+/**
+ * The prepared-context record. Pi owns the Engram session (`gentle-engram` opens, summarizes, and
+ * captures), so this record only says which prelude this project last prepared and when. It is not
+ * a session and closing it never talks to Engram.
+ */
 export interface SessionInfo {
   sessionId: string;
   projectName: string;
@@ -25,26 +29,12 @@ export function generateSessionId(): string {
   return `rapso-${date}-${suffix}`;
 }
 
-export async function openSession(projectDir: string, sessionId: string): Promise<boolean> {
-  step('Opening Engram session via MCP');
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
-  const projectName = readProjectName(projectDir);
-
-  try {
-    const client = new MCPClient('engram', ['mcp']);
-    try {
-      await client.initialize();
-      await client.callTool('mem_session_start', { id: sessionId });
-    } finally {
-      await client.close();
-    }
-    success('Engram session started');
-  } catch (e: any) {
-    warn(`Engram MCP not available: ${e.message || 'unknown error'}`);
-    info('Continuing without session tracking');
-  }
-
-  step('Writing session metadata');
+/** Record what `rapso start` prepared. Local state only; no MCP call. */
+export function prepareContext(projectDir: string, sessionId: string, projectName: string): void {
   const rapsodiaDir = stateDir(projectDir);
   if (!existsSync(rapsodiaDir)) {
     mkdirSync(rapsodiaDir, { recursive: true });
@@ -62,85 +52,6 @@ export async function openSession(projectDir: string, sessionId: string): Promis
     JSON.stringify(sessionInfo, null, 2),
     'utf-8',
   );
-
-  success(`Session ${sessionId} opened`);
-  return true;
-}
-
-export async function closeSession(
-  projectDir: string,
-  sessionId: string,
-  summary?: string,
-): Promise<boolean> {
-  step('Finalizing Engram session');
-
-  try {
-    const client = new MCPClient('engram', ['mcp']);
-    try {
-      await client.initialize();
-
-      if (summary) {
-        try {
-          await client.callTool('mem_session_summary', {
-            session_id: sessionId,
-            content: summary,
-          });
-          success('Session summary saved');
-        } catch (e: any) {
-          warn(`Failed to save session summary: ${e.message}`);
-        }
-      }
-
-      try {
-        await client.callTool('mem_session_end', { id: sessionId });
-        success('Session ended via Engram');
-      } catch (e: any) {
-        warn(`Failed to end session via Engram: ${e.message}`);
-      }
-    } finally {
-      await client.close();
-    }
-  } catch (e: any) {
-    warn(`Engram MCP not available: ${e.message}`);
-  }
-
-  step('Exporting to wiki');
-  try {
-    // Gating on the file alone made the `engram` fallback below unreachable on Windows: the
-    // template ships the script, but a native Windows box has no `bash` to run it, so the whole
-    // export fell through to the catch and degraded to a warning.
-    const scriptPath = join(projectDir, 'scripts', 'engram-export-wiki.sh');
-    if (existsSync(scriptPath) && commandAvailable('bash')) {
-      execFileSync('bash', [scriptPath], {
-        cwd: projectDir,
-        stdio: 'pipe',
-        timeout: 30000,
-      });
-      success('Wiki export complete');
-    } else {
-      execFileSync('engram', ['obsidian-export', '--vault', 'wiki'], {
-        cwd: projectDir,
-        stdio: 'pipe',
-        timeout: 30000,
-      });
-      success('Wiki export complete');
-    }
-  } catch (e: any) {
-    warn(`Wiki export skipped: ${e.message}`);
-  }
-
-  step('Cleaning up session files');
-  const sessionPath = resolveStatePath(projectDir, 'session.json');
-  try {
-    if (sessionPath && existsSync(sessionPath)) {
-      unlinkSync(sessionPath);
-      success('Session file cleaned up');
-    }
-  } catch (e: any) {
-    warn(`Failed to clean up session file: ${e.message}`);
-  }
-
-  return true;
 }
 
 export function getSessionInfo(projectDir: string): SessionInfo | null {
@@ -157,13 +68,51 @@ export function getSessionInfo(projectDir: string): SessionInfo | null {
   }
 }
 
+/**
+ * Export Engram memory to the Obsidian vault. A project that ships the template script uses it;
+ * a native Windows box has no `bash`, so the direct `engram` call is the fallback rather than a
+ * second choice gated behind a file that always exists.
+ */
+export function exportWiki(projectDir: string): boolean {
+  try {
+    const scriptPath = join(projectDir, 'scripts', 'engram-export-wiki.sh');
+    if (existsSync(scriptPath) && commandAvailable('bash')) {
+      execFileSync('bash', [scriptPath], { cwd: projectDir, stdio: 'pipe', timeout: 30000 });
+    } else {
+      execFileSync('engram', ['obsidian-export', '--vault', 'wiki'], { cwd: projectDir, stdio: 'pipe', timeout: 30000 });
+    }
+    success('Wiki export complete');
+    return true;
+  } catch (e: unknown) {
+    warn(`Wiki export skipped: ${errorMessage(e)}`);
+    return false;
+  }
+}
+
+/** Remove the prepared-context record and the prelude it points at, including the legacy path. */
+export function clearPreparedContext(projectDir: string): number {
+  const targets = [
+    resolveStatePath(projectDir, 'session.json'),
+    statePath(projectDir, 'prelude.md'),
+    join(projectDir, LEGACY_PROJECT_STATE_DIR_NAME, 'prelude.md'),
+  ];
+  let removed = 0;
+  for (const target of targets) {
+    if (target && existsSync(target)) {
+      unlinkSync(target);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 export function generateRetrospective(
   projectDir: string,
-  sessionInfo: SessionInfo,
   summary: string,
   warnings: string[],
+  startedAt?: Date,
 ): string {
-  const startDate = new Date(sessionInfo.startedAt);
+  const startDate = startedAt ?? new Date();
   const endDate = new Date();
   const durationMs = endDate.getTime() - startDate.getTime();
   const durationHours = Math.floor(durationMs / 3600000);
@@ -172,23 +121,17 @@ export function generateRetrospective(
     ? `${durationHours}h ${durationMinutes}m`
     : `${durationMinutes}m`;
 
-  const dateStr = startDate.toISOString().split('T')[0];
+  const iso = startDate.toISOString();
+  const dateStr = iso.split('T')[0];
+  const sessionLabel = `rapso-${iso.slice(0, 16).replace('T', '-').replace(':', '')}`;
 
   const gaps: string[] = [];
   const suggestions: string[] = [];
 
   const warnText = warnings.join(' ').toLowerCase();
   if (warnText.includes('graphify') || !existsSync(resolveGraphifyPaths(projectDir).graphJson)) {
-    gaps.push('Graphify report not found at session start');
+    gaps.push('Graphify report not found when the context was finalized');
     suggestions.push('Run `graphify . --update` to enable code structure awareness');
-  }
-  if (warnText.includes('sdd')) {
-    gaps.push('SDD change artifacts not found');
-    suggestions.push('Use `/sdd-new` before starting complex features');
-  }
-  if (warnText.includes('engram')) {
-    gaps.push('Engram MCP unavailable during session');
-    suggestions.push('Ensure Engram MCP is available for memory persistence');
   }
 
   if (gaps.length === 0) {
@@ -200,8 +143,8 @@ export function generateRetrospective(
 
   return `# Session Retrospective
 
-**Session**: ${sessionInfo.sessionId}
-**Project**: ${sessionInfo.projectName}
+**Session**: ${sessionLabel}
+**Project**: ${readProjectName(projectDir)}
 **Date**: ${dateStr}
 **Duration**: ${durationStr}
 
@@ -209,7 +152,7 @@ export function generateRetrospective(
 ${summary || 'No summary provided'}
 
 ## What Went Well
-- Session completed successfully
+- Context prepared and finalized cleanly
 ${summary ? `- Goal: ${summary}` : ''}
 
 ## What Could Be Improved

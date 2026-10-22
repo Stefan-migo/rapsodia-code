@@ -31,20 +31,7 @@ else
   pip install graphifyy 2>&1 | tail -1
 fi
 
-# ── 3. OpenCode Custom Tools ────────────────────────────────────
-echo ""
-echo "--- OpenCode Custom Tools ---"
-if [ -d .opencode/tools ]; then
-  if [ -f .opencode/tools/node_modules/.package-lock.json ]; then
-    echo "  ✓ tools dependencies already installed"
-  else
-    echo "  Installing tools dependencies..."
-    cd .opencode/tools && npm install --silent 2>&1 | tail -1 && cd ../..
-    echo "  ✓ tools dependencies installed"
-  fi
-fi
-
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║  Done. Run: opencode                                    ║"
+echo "║  Done. Run: gentle-shell                                ║"
 echo "╚══════════════════════════════════════════════════════════╝"

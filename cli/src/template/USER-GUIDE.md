@@ -1,117 +1,106 @@
 # Rapsodia 2.5 — User Guide
 
-Your guide to using the Rapsodia 2.5 tool-driven executive reasoning system with OpenCode.
+A practical guide to preparing project context and using Rapsodia with Pi.
 
 ---
 
 ## Quick Start
 
+From your Rapsodia project, prepare context and open Pi:
+
 ```bash
 cd {PROJECT_NAME}
-opencode
+rapso start
 ```
 
-The system loads automatically. Two agents are available, switch with Tab:
+Then open the project in Pi.
 
-| Agent | Tab | Use for |
-|-------|-----|---------|
-| `@Rapso-Planner` | Planner | Planning, research, specs, memory |
-| `@Rapso-Developer` | Developer | Building, coding, testing, quality |
+`rapso start` writes `.rapsodia-code/session.json` and builds `.rapsodia-code/prelude.md`. It does not open an Engram session or launch an agent. Read the prelude before your first task. To have `rapso start` launch an agent after preparation, opt in with `--run`; it launches `RAPSO_AGENT` or, by default, `gentle-shell`.
+
+If you only want to build or refresh the prelude, use `rapso context`. It does not write a prepared-context record or launch an agent.
 
 ---
 
 ## Daily Workflow
 
-### Start a Session
-1. Switch to `@Rapso-Planner`
-2. Agent auto-runs `mem_session_start` and `mem_context` to restore context
-3. Discuss your goal with the agent
+### Start a session
 
-### Build a Feature (ODD default)
-```
-1. Use the `rapso-session` skill to discuss and structure the goal (Planner)
-2. Close with an ODD handoff; after explicit consent, create the worktree:
-   rapso worktree create <slug>       (from the main worktree)
-3. The ODD task doc odd/tasks/<feature>.md is created INSIDE that worktree
-4. Tab to @Rapso-Developer
-5. Developer executes via 5-Step Gate:
-   ← Graph check → Atomic commit → Verify → Spec check (SDD only) → Memory save
-6. Commit on branch odd/<slug> and open the PR
+1. Run `rapso start` in the project. Use `--no-prelude` to skip building the prelude or `--dry-run` to see the planned actions without writing.
+2. Start Pi in the project and read `.rapsodia-code/prelude.md` before your first task.
+3. In a trusted project, the `rapsodia-context` extension refreshes a missing or five-minute-old prelude in the background and points the first user run at it. Without project trust, the extension does not load; follow the `AGENTS.md` prelude-reading rule and run `rapso context` when needed.
 
-Gentle AI SDD remains available when explicitly requested:
-   /sdd-new → /sdd-ff → /sdd-status → /sdd-apply → /sdd-verify → /sdd-archive
-```
+### Build a feature (ODD workflow)
 
-### End a Session
-1. `@Rapso-Developer` saves discoveries: `mem_save`
-2. `@Rapso-Planner` runs `mem_session_summary` + `mem_session_end`
-3. Run `scripts/engram-export-wiki.sh` to sync to Obsidian vault
+1. Use the `rapso-session` project skill to structure planning discussions when useful.
+2. Write and follow the ODD task document for the feature.
+3. For substantial work, create an isolated worktree with `rapso worktree create <slug>` after deciding to do so.
+4. Implement and verify the task in that worktree, then use your normal Git and review process.
+
+ODD is the workflow described by this project. The retired SDD `/sdd-*` commands and `openspec/` workflow are not available here.
+
+### End a session
+
+1. Let `gentle-engram` handle the Engram session summary and lifecycle.
+2. Run `rapso close` to export the wiki and clean up the prepared context. `rapso close` does not end an Engram session.
+3. Add `--message "..."` to provide summary text. Add `--retrospective` to write a retrospective; add `--no-export` to skip wiki export.
 
 ---
 
 ## Tool Reference
 
-### Engram (Memory — Hippocampus)
-| Tool | When |
-|------|------|
-| `mem_save` | After every decision, bug fix, pattern, discovery |
-| `mem_search` | When you need to recall past context |
-| `mem_judge` | When mem_save returns conflict candidates |
-| `mem_session_start` | Session start |
-| `mem_session_end` | Session end |
-| `mem_session_summary` | Before closing |
+### Rapsodia CLI
 
-### Gentle AI SDD (Planning — opt-in, on explicit request)
 | Command | What it does |
 |---------|-------------|
-| `/sdd-new` | Start a structured change and its proposal |
-| `/sdd-ff` | Produce spec, design, and tasks artifacts |
-| `/sdd-status` | Check change state and available next steps |
-| `/sdd-apply` | Execute the change tasks |
-| `/sdd-verify` | Verify the implementation and artifacts |
-| `/sdd-archive` | Close and preserve a completed change |
+| `rapso init` | Scaffold a project |
+| `rapso install` | Check dependencies and print installation steps; does not install anything |
+| `rapso start` | Write `.rapsodia-code/session.json` and build the prelude; `--run` opts into launching `RAPSO_AGENT` (default `gentle-shell`) |
+| `rapso context` | Build only the prelude; supports `--dry-run` |
+| `rapso close` | Export wiki, clean prepared context, and optionally write a retrospective |
+| `rapso status` | Report prepared context and the `gentle-shell` agent, plus project/tool health |
+| `rapso update` | Check or update Rapsodia template files |
+| `rapso adopt` | Install Rapsodia into an existing project |
+| `rapso analyze` | Analyze session patterns and suggest improvements |
+| `rapso worktree` | Create and manage isolated ODD worktrees |
 
-### Graphify (Code Understanding — Parietal Lobe)
-| Command | When |
-|---------|------|
-| `{PYTHON_COMMAND} -m graphify.serve graphify-out/graph.json` | Start MCP server |
-| `query_graph` | Before editing any code |
-| `god_nodes` | Find key concepts |
-| `/graphify . --update` | After major refactors |
+`rapso start` also supports `--no-prelude` and `--dry-run`. It does not have a `--no-open` option. `rapso close` supports `--message`, `--no-export`, and `--retrospective`. Use `rapso <command> --help` for other command options.
 
-### Code Sandbox
-| Tool | Use |
-|------|-----|
-| `execute_script` | Run TypeScript/JS snippets for prototyping |
+### Pi project resources
 
-### Execution Discipline (5-Step Gate)
-Built into `@Rapso-Developer` — fires automatically on every task:
-1. **GRAPH CHECK** — query the knowledge graph before editing
-2. **ATOMIC COMMIT** — one concern per commit (≤5 files)
-3. **VERIFY** — the project's configured checks (never claim one that does not exist)
-4. **SPEC CHECK** — only when SDD was explicitly used; /sdd-verify is optional diagnostics
-5. **MEMORY** — mem_save key learnings
+| Resource | Purpose |
+|---------|---------|
+| `AGENTS.md` | Project instructions Pi reads natively; includes the prelude-reading fallback |
+| `.agents/skills/` | Project skills; the template ships `rapso-session` and `design-system` |
+| `.pi/extensions/` | Project extensions; the template ships `rapsodia-context.ts` |
+| `.pi/mcp.json` | Optional project MCP server configuration; requires project trust |
+| `.rapsodia-code/` | Local ignored project state, including the prepared-context record and prelude |
 
-Plus a pre-commit hook enforces the ≤5-file atomicity gate mechanically.
+### Engram (Memory)
+
+`gentle-engram` owns the Engram session lifecycle, summaries, and passive capture. Rapsodia only reads Engram context to build the prelude. Do not use `rapso close` as a substitute for ending an Engram session.
+
+### Graphify (Code Understanding)
+
+Graphify remains the code graph. Refresh it with `graphify . --update`. An optional Graphify MCP server can be configured in `.pi/mcp.json` (project trust required).
 
 ---
 
 ## Architecture (Brain Lobe Model)
 
 ```
-Frontal Lobe  → ODD (rapso-session) + Gentle AI SDD on request — Planning
-Parietal Lobe → Graphify — Code understanding before edits
-Hippocampus   → Engram (MCP) — Persistent SQLite memory, 19 tools
-Occipital Lobe → wiki/ — Obsidian-readable snapshot from Engram
+Frontal Lobe   → ODD task document — Planning
+Parietal Lobe  → Graphify — Code understanding
+Hippocampus    → Engram — Persistent memory, session lifecycle owned by gentle-engram
+Occipital Lobe → wiki/ — Snapshot exported from Engram
 ```
 
-Two agents, four lobes.
+Rapsodia CLI prepares context; Pi is the project runtime, and `gentle-engram` manages the Engram session.
 
 ---
 
 ## Obsidian Usage
 
-The `wiki/` directory is an Obsidian vault. At session end, `scripts/engram-export-wiki.sh` syncs Engram observations to `wiki/engram/` as markdown files with proper frontmatter and [[wikilinks]]. Open the `wiki/` folder in Obsidian for visual graph view and Dataview dashboards.
+The `wiki/` directory is an Obsidian vault. `rapso close` exports the wiki by default; use `--no-export` to skip the export. Open the `wiki/` folder in Obsidian to browse it.
 
 ---
 
@@ -119,8 +108,8 @@ The `wiki/` directory is an Obsidian vault. At session end, `scripts/engram-expo
 
 | Problem | Fix |
 |---------|-----|
-| Agent doesn't load context | Run `mem_context` manually |
-| SDD command not found | Check the installed `/sdd-*` commands |
-| Engram MCP not connecting | Run `engram mcp --tools=all` to test |
-| Graphify graph is stale | Run `/graphify . --update` |
-| Pre-commit hook too strict | Edit threshold in `.git/hooks/pre-commit` |
+| The prelude is missing or stale | Run `rapso context` to build only the prelude |
+| The Pi extension does not run | Grant project trust, or follow `AGENTS.md` and refresh the prelude with `rapso context` |
+| `rapso install` reports missing dependencies | Follow the printed installation steps; the command does not install them |
+| Engram context is unavailable in the prelude | Check that `gentle-engram`/Engram is available; Rapsodia reads context but does not own the session |
+| Graphify graph is stale | Run `graphify . --update` |

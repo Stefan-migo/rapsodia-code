@@ -1,36 +1,45 @@
 import { execFileSync } from '../utils/exec';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { basename, dirname, join, relative, resolve } from 'path';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { basename, dirname, join, relative } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
 import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
 import { migrateLegacyState, resolveStatePath, sessionsDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
 import { CLI_VERSION } from '../utils/version';
-import { mergeGitignore, OPENCODE_GITIGNORE } from './gitignore';
+import { mergeGitignore } from './gitignore';
 
-export const OWNED_PATHS = [
-  '.opencode/agents/**', '.opencode/tools/**',
-  '.opencode/skills/**', '.opencode/plugins/**', '.opencode/mcp-template.json',
-  '.opencode/package.json', '.opencode/package-lock.json',
-];
+/**
+ * The template paths Rapsodia owns. Pi reads project skills from `.agents/skills/` and project
+ * extensions from `.pi/extensions/`, so those are the only surfaces adoption may create, refresh, or
+ * report as owned. The retired `.opencode/` tree is no longer ours: a consumer that still carries one
+ * keeps it, and Pi ignores it.
+ */
+export const OWNED_PATHS = ['.agents/skills/**', '.pi/extensions/**'];
 
 export const NEVER_PATHS = ['DESIGN.md', 'SYSTEM-MAP.md', 'USER-GUIDE.md', 'wiki/**', 'scripts/**'];
+
+/** The pre-Pi surface Rapsodia wrote or depended on. It is reported, never deleted. */
+const RETIRED_ROOTS = ['.opencode', 'openspec', 'opencode.json', 'scripts/setup.sh'];
 
 /** Adopted projects may already carry this heading; matching it avoids duplicate defect sections. */
 const LEGACY_DEFECT_HEADING = '## Reporting Cortex Defects';
 
-/**
- * Agent identities this pack renamed. The key is the retired name, the value the one that
- * replaced it. Both live in `agent` entries and in `.opencode/agents/<name>.md`, and adoption
- * must retire both or the consumer runs two generations of the same agent.
- */
-const LEGACY_AGENTS: Record<string, string> = {
-  'cortex-planner': 'rapso-planner',
-  'cortex-developer': 'rapso-developer',
-};
+export interface AdoptPlan {
+  created: string[];
+  refreshed: string[];
+  removed: string[];
+  leftover: string[];
+  conflicting: string[];
+  injected: string[];
+  seeded: string[];
+  skipped: string[];
+  overwritten: string[];
+}
 
-export interface AdoptPlan { created: string[]; refreshed: string[]; removed: string[]; leftover: string[]; conflicting: string[]; injected: string[]; seeded: string[]; skipped: string[]; }
-
-interface AdoptOptions { dryRun?: boolean; yes?: boolean; force?: boolean; }
+export interface AdoptOptions {
+  dryRun?: boolean;
+  yes?: boolean;
+  force?: boolean;
+}
 
 function matches(path: string, pattern: string): boolean {
   const normalizedPath = path.replace(/\\/g, '/');
@@ -40,6 +49,95 @@ function matches(path: string, pattern: string): boolean {
 }
 
 function isOwned(path: string): boolean { return OWNED_PATHS.some((pattern) => matches(path, pattern)); }
+
+/**
+ * Report the retired surface one entry at a time, classified by whether Rapsodia ever wrote inside
+ * it. A directory holding any manifest-recorded file is `removed`: the human can delete it once the
+ * project no longer uses OpenCode. Everything else is `leftover`: the project's own content, such as
+ * a skill it added under `.opencode/skills`, which no flag may touch. Nothing here deletes anything,
+ * and the plan stays one line per entry so it remains readable on a project with a large tree.
+ */
+function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): { removed: string[]; leftover: string[] } {
+  const removed: string[] = [];
+  const leftover: string[] = [];
+
+  const normalized = (absolute: string): string => relative(targetDir, absolute).replace(/\\/g, '/');
+
+  // Early exit on the first recorded file: a retired tree can carry node_modules or a 3.8 MB
+  // openspec directory, and the plan only needs to know whether Rapsodia wrote inside it.
+  // This whole function is a report: an unreadable directory must degrade to "we cannot classify
+  // it", never abort an adoption.
+  const readDirectory = (absolute: string): string[] | null => {
+    try {
+      return readdirSync(absolute);
+    } catch {
+      return null;
+    }
+  };
+
+  const isDirectory = (absolute: string): boolean => {
+    try {
+      return lstatSync(absolute).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+
+  // `lstat` and an explicit symlink refusal: a link can point outside the project, and a link to an
+  // ancestor would recurse forever on a project that keeps one under `.opencode`.
+  const holdsRecordedFile = (absolute: string): boolean => {
+    let stat;
+    try {
+      stat = lstatSync(absolute);
+    } catch {
+      return false;
+    }
+    if (stat.isSymbolicLink()) return false;
+    if (!stat.isDirectory()) return manifestPaths.has(normalized(absolute));
+    for (const entry of readDirectory(absolute) ?? []) {
+      if (holdsRecordedFile(join(absolute, entry))) return true;
+    }
+    return false;
+  };
+
+  const record = (absolute: string): void => {
+    (holdsRecordedFile(absolute) ? removed : leftover).push(normalized(absolute));
+  };
+
+  for (const root of RETIRED_ROOTS) {
+    const absolute = join(targetDir, root);
+    let stat;
+    // `existsSync` answers false for a broken symlink, which would hide it from the plan; `lstat`
+    // distinguishes "absent" from "present but dangling".
+    try {
+      stat = lstatSync(absolute);
+    } catch {
+      continue;
+    }
+    // `.opencode` is expanded so each skill stays visible next to the ones Rapsodia wrote. A
+    // symlinked root is reported as one entry and never expanded: its contents are not ours.
+    if (root !== '.opencode' || stat.isSymbolicLink() || !stat.isDirectory()) {
+      record(absolute);
+      continue;
+    }
+    const entries = readDirectory(absolute);
+    if (!entries) {
+      record(absolute);
+      continue;
+    }
+    for (const entry of entries) {
+      const child = join(absolute, entry);
+      const skills = entry === 'skills' && isDirectory(child) ? readDirectory(child) : null;
+      if (skills) {
+        for (const skill of skills) record(join(child, skill));
+      } else {
+        record(child);
+      }
+    }
+  }
+
+  return { removed: removed.sort(), leftover: leftover.sort() };
+}
 
 function getDate(): string { return new Date().toISOString().split('T')[0]; }
 
@@ -65,64 +163,6 @@ function injectSections(content: string, sections: Array<[string, string]>): { c
   return { content: `${content.replace(/\s*$/, '')}\n\n${suffix}\n`, changed: true };
 }
 
-function mergeJson(content: string, targetDir: string, templateDir: string, retireAgents: string[], created: string[]): { content: string; changed: boolean; removed: string[] } {
-  const current = JSON.parse(content || '{}') as Record<string, any>;
-  const template = JSON.parse(readFileSync(join(templateDir, 'opencode.json'), 'utf-8')) as Record<string, any>;
-  const before = JSON.stringify(current);
-  const removed: string[] = [];
-  current.agent = current.agent || {};
-  for (const name of ['rapso-planner', 'rapso-developer']) {
-    const existing = current.agent[name] as Record<string, any> | undefined;
-    // Only claim an entry that is absent or already ours. A project agent that happens to
-    // share our name is the project's, and silently replacing it would destroy configuration.
-    if (existing && existing.__managed_by !== 'cortex') continue;
-    current.agent[name] = { ...template.agent[name], __managed_by: 'cortex' };
-  }
-  // Retire the identity this pack superseded, but only for the names the caller proved safe to
-  // retire and only when the entry is provably ours and its replacement is present. A project
-  // agent that merely shares a retired name is never touched, and removing the config entry
-  // before the replacement exists would leave the project with no agent at all.
-  for (const legacy of retireAgents) {
-    const entry = current.agent[legacy] as Record<string, any> | undefined;
-    if (!entry || entry.__managed_by !== 'cortex') continue;
-    if (!current.agent[LEGACY_AGENTS[legacy]]) continue;
-    delete current.agent[legacy];
-    removed.push(`agent.${legacy}`);
-  }
-  current.mcp = current.mcp || {};
-  for (const name of ['engram', 'graphify']) if (!(name in current.mcp)) current.mcp[name] = template.mcp[name];
-  const plugin = '.opencode/plugins/graphify.js';
-  // A `plugin` key that is present but not an array belongs to the project; replacing it with
-  // an empty array would drop whatever it holds. Only ever seed or extend an array.
-  if (Array.isArray(current.plugin)) {
-    const pluginIdentity = resolve(targetDir, plugin);
-    // A dry run writes nothing, so the file's absence would otherwise hide the swap from the
-    // plan. `created` reports it the same way the retired-agent check below already reads it.
-    const installed = existsSync(join(targetDir, plugin)) || created.includes(plugin);
-    const pluginSuffix = `/${plugin}`;
-    let found = false;
-    current.plugin = current.plugin.filter((entry) => {
-      if (typeof entry !== 'string') return true;
-      const resolved = resolve(targetDir, entry);
-      if (resolved !== pluginIdentity) {
-        // An older adopt wrote this entry as an absolute path into whichever checkout installed
-        // it — a retired `~/.cortex` clone, or a sibling project. It names our plugin but
-        // resolves outside this project, so it loads code from a tree the project does not own
-        // and can never converge onto its own copy. It is dropped only once this project's copy
-        // exists, for the same reason a retired agent entry is kept while its replacement is
-        // missing: a config entry must never outlive, or precede, the file behind it.
-        return !installed || !entry.replace(/\\/g, '/').endsWith(pluginSuffix);
-      }
-      if (found) return false;
-      found = true;
-      return true;
-    });
-    if (!found && installed) current.plugin.push(plugin);
-  } else if (current.plugin === undefined && existsSync(join(targetDir, plugin))) current.plugin = [plugin];
-  const output = JSON.stringify(current, null, 2) + '\n';
-  return { content: output, changed: JSON.stringify(current) !== before, removed };
-}
-
 function writeFile(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, 'utf-8');
@@ -134,7 +174,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   }
   const projectName = basename(targetDir) || 'project';
   const templateOptions: TemplateOptions = { projectName, projectType: 'default', date: getDate(), year: new Date().getFullYear().toString() };
-  const plan: AdoptPlan = { created: [], refreshed: [], removed: [], leftover: [], conflicting: [], injected: [], seeded: [], skipped: [] };
+  const plan: AdoptPlan = { created: [], refreshed: [], removed: [], leftover: [], conflicting: [], injected: [], seeded: [], skipped: [], overwritten: [] };
   const manifestWritePath = statePath(targetDir, 'manifest.json');
   // Read through the legacy path too: a dry run does not migrate the state directory, so
   // `.rapsodia-code/manifest.json` is absent until the real run renames it. Reading only the new
@@ -146,6 +186,9 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
     catch { oldManifest = undefined; }
   }
   const oldHashes = new Map((oldManifest?.files || []).map((file) => [normalizeManifestPath(file.path), file.hash]));
+  const retired = classifyRetiredSurface(targetDir, new Set([...oldHashes.keys()].map((path) => normalizeManifestPath(path))));
+  plan.removed.push(...retired.removed);
+  plan.leftover.push(...retired.leftover);
 
   for (const file of collectFiles(templateDir, templateDir).filter(isOwned)) {
     const source = join(templateDir, file);
@@ -161,44 +204,21 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
       if (!options.dryRun) writeFileSync(target, content);
     } else {
       plan.conflicting.push(file);
-      if (!options.dryRun && options.force) writeFileSync(target, content);
+      if (!options.dryRun && options.force) {
+        writeFileSync(target, content);
+        plan.overwritten.push(file);
+      }
     }
-  }
-
-  // A retired agent is safe to remove only when it is provably ours and its replacement is
-  // installed. Its file, when it has one, must still carry the bytes the legacy manifest
-  // recorded, which is the same evidence that decides `refreshed` above; a file that fails that
-  // check is the project's, and its config entry is kept with it, or the consumer would be left
-  // with a config entry and no file, or a file and no config entry.
-  const retireAgents: string[] = [];
-  for (const [legacy, replacement] of Object.entries(LEGACY_AGENTS)) {
-    const legacyFile = `.opencode/agents/${legacy}.md`;
-    const legacyPath = join(targetDir, legacyFile);
-    const replacementFile = `.opencode/agents/${replacement}.md`;
-    const replacementInstalled = existsSync(join(targetDir, replacementFile)) || plan.created.includes(replacementFile);
-    const fileUntouched = !existsSync(legacyPath) || oldHashes.get(legacyFile) === hashFile(legacyPath);
-    if (!replacementInstalled || !fileUntouched) {
-      if (existsSync(legacyPath)) plan.leftover.push(legacyFile);
-      continue;
-    }
-    if (existsSync(legacyPath)) {
-      plan.removed.push(legacyFile);
-      if (!options.dryRun) rmSync(legacyPath, { force: true });
-    }
-    retireAgents.push(legacy);
   }
 
   const agentsPath = join(targetDir, 'AGENTS.md');
   const ignorePath = join(targetDir, '.gitignore');
-  const configs = [join(targetDir, 'opencode.json'), join(targetDir, '.opencode/opencode.json')].filter((path) => existsSync(path));
-  if (configs.length === 0) configs.push(join(targetDir, 'opencode.json'));
-  const merges: Array<[string, { content: string; changed: boolean; removed?: string[] }]> = [];
-  merges.push([agentsPath, injectSections(existsSync(agentsPath) ? readFileSync(agentsPath, 'utf-8') : '', markdownSections(templateDir, templateOptions))]);
-  merges.push([ignorePath, mergeGitignore(existsSync(ignorePath) ? readFileSync(ignorePath, 'utf-8') : '')]);
-  for (const path of configs) merges.push([path, mergeJson(existsSync(path) ? readFileSync(path, 'utf-8') : '', targetDir, templateDir, retireAgents, plan.created)]);
+  const merges: Array<[string, { content: string; changed: boolean }]> = [
+    [agentsPath, injectSections(existsSync(agentsPath) ? readFileSync(agentsPath, 'utf-8') : '', markdownSections(templateDir, templateOptions))],
+    [ignorePath, mergeGitignore(existsSync(ignorePath) ? readFileSync(ignorePath, 'utf-8') : '')],
+  ];
   for (const [path, result] of merges) {
     const label = relative(targetDir, path);
-    for (const name of result.removed ?? []) plan.removed.push(`${label} → ${name}`);
     if (!result.changed) plan.skipped.push(label);
     else { plan.injected.push(label); if (!options.dryRun) writeFile(path, result.content); }
   }
@@ -208,12 +228,8 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   // `.gitignore` already sits at the new path when this check runs. A dry run does not perform
   // that rename, and must still not promise to create a file the real run leaves alone.
   const legacySessionsIgnore = join(targetDir, '.cortex-sessions', '.gitignore');
-  // npm never publishes a file named `.gitignore`, so the template cannot carry this one either;
-  // adoption seeds it the same way it seeds the session store's.
-  const opencodeIgnore = join(targetDir, '.opencode', '.gitignore');
   for (const [path, content, present] of [
     [sessionsIgnore, '*\n', existsSync(sessionsIgnore) || existsSync(legacySessionsIgnore)],
-    [opencodeIgnore, OPENCODE_GITIGNORE, existsSync(opencodeIgnore)],
     [join(targetDir, 'odd/tasks/.gitkeep'), '', existsSync(join(targetDir, 'odd/tasks/.gitkeep'))],
   ] as const) {
     if (present) plan.skipped.push(relative(targetDir, path));
@@ -225,6 +241,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   }
   if (oldManifest) plan.skipped.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));
   else plan.seeded.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));
+  plan.overwritten.sort();
   return plan;
 }
 

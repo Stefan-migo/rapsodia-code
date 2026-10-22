@@ -18,13 +18,10 @@ export const PROJECT_BASELINE_IGNORES = [
 export const MANAGED_IGNORE_ENTRIES = [
   // The nested sessions store is already covered by the state directory contents rule.
   `${PROJECT_STATE_DIR_NAME}/`, 'graphify-out/',
-  '.opencode/tools/node_modules/', '.engram/', '.obsidian/workspace.json',
+  '.engram/', '.obsidian/workspace.json',
   '.obsidian/workspace', '__pycache__/', '*.pyc',
   '*.pyo', '.pytest_cache/', '.ruff_cache/', '.mypy_cache/',
 ];
-
-/** `.opencode/` installs its own dependencies; nothing there belongs in a project's history. */
-export const OPENCODE_GITIGNORE = ['node_modules/', 'bun.lock'].join('\n') + '\n';
 
 const MANAGED_START = '# rapso:start';
 const MANAGED_END = '# rapso:end';
@@ -44,6 +41,11 @@ function injectMarked(content: string, start: string, end: string, block: string
   return { content: `${content.replace(/\s*$/, '')}\n\n${replacement}\n`, changed: true };
 }
 
+/** Every managed block in the file, in order. A duplicated block is stale Rapsodia state. */
+function stripManagedBlocks(content: string): string {
+  return content.split(new RegExp(MANAGED_BLOCK.source, 'g')).join('');
+}
+
 /**
  * Rewrite the managed block in an existing `.gitignore`, leaving everything outside it alone.
  * Idempotent: a file that already carries the current block comes back byte-identical.
@@ -54,13 +56,22 @@ export function mergeGitignore(content: string): { content: string; changed: boo
   // second block instead of maintaining the one that exists.
   let renamed = content;
   for (const [from, to] of LEGACY_MARKERS) renamed = renamed.split(from).join(to);
-  const marked = renamed.match(MANAGED_BLOCK)?.[0] || '';
-  const outside = renamed.replace(marked, '');
+  // Remove every managed block before collecting the project-owned lines: with a duplicated
+  // block, treating the second one as project content would drop its entries from the regenerated
+  // block and leave stale managed state behind.
+  const outside = stripManagedBlocks(renamed);
   const existingOutside = new Set(outside.split(/\r?\n/).map((line) => line.trim()));
   const entries = MANAGED_IGNORE_ENTRIES.filter((entry) => !existingOutside.has(entry));
   const block = [MANAGED_HEADER, ...entries].join('\n');
   const result = injectMarked(renamed, MANAGED_START, MANAGED_END, block);
-  return { content: result.content, changed: result.content !== content };
+  // Keep the block `injectMarked` wrote or replaced in place and drop later duplicates.
+  let seen = false;
+  const normalized = result.content.replace(new RegExp(MANAGED_BLOCK.source, 'g'), (match) => {
+    if (seen) return '';
+    seen = true;
+    return match;
+  });
+  return { content: normalized, changed: normalized !== content };
 }
 
 /**
@@ -79,7 +90,6 @@ export function seedGitignore(): string {
 export function writeProjectIgnores(targetDir: string): string[] {
   const files: Array<[string, string]> = [
     ['.gitignore', seedGitignore()],
-    [join('.opencode', '.gitignore'), OPENCODE_GITIGNORE],
   ];
   for (const [path, content] of files) {
     const target = join(targetDir, path);

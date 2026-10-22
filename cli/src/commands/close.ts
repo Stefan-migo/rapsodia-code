@@ -1,35 +1,13 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'fs';
 import * as readline from 'readline';
-import { step, info, success, warn, error, heading } from '../utils/logger';
-import { getSessionInfo, closeSession, generateRetrospective, saveRetrospective } from '../engine/session';
+import { step, info, success, warn, heading } from '../utils/logger';
+import { getSessionInfo, exportWiki, clearPreparedContext, generateRetrospective, saveRetrospective, errorMessage } from '../engine/session';
 import { resolveGraphifyPaths } from '../engine/project';
-import { statePath, resolveStatePath, LEGACY_PROJECT_STATE_DIR_NAME, PROJECT_STATE_DIR_NAME } from '../utils/state';
 
 interface CloseOptions {
   message?: string;
   export?: boolean;
   retrospective?: boolean;
-}
-
-interface OpenCodeConfig {
-  instructions?: string[];
-  [key: string]: any;
-}
-
-function readOpenCodeConfig(projectDir: string): OpenCodeConfig | null {
-  const configPath = join(projectDir, 'opencode.json');
-  if (!existsSync(configPath)) return null;
-  try {
-    return JSON.parse(readFileSync(configPath, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-function writeOpenCodeConfig(projectDir: string, config: OpenCodeConfig): void {
-  const configPath = join(projectDir, 'opencode.json');
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
 }
 
 function promptForSummary(): Promise<string> {
@@ -39,7 +17,7 @@ function promptForSummary(): Promise<string> {
   });
 
   return new Promise((resolve) => {
-    console.log(''); 
+    console.log('');
     rl.question('Session summary (Ctrl+D to skip): ', (answer) => {
       rl.close();
       resolve(answer.trim());
@@ -48,88 +26,58 @@ function promptForSummary(): Promise<string> {
 }
 
 export async function closeCommand(options: CloseOptions): Promise<void> {
-  heading('Rapsodia Session Close');
+  heading('Rapsodia Close');
 
   const projectDir = process.cwd();
-
-  if (!resolveStatePath(projectDir, 'session.json')) {
-    error('No active session found in this directory.');
-    info('Run `rapso start` to begin a session.');
-    process.exit(1);
-  }
-
   const sessionInfo = getSessionInfo(projectDir);
-  if (!sessionInfo) {
-    error('Could not read session info. Session file may be corrupted.');
-    process.exit(1);
-  }
 
-  info(`Session: ${sessionInfo.sessionId}`);
-  info(`Started: ${sessionInfo.startedAt}`);
-  info(`Project: ${sessionInfo.projectName}`);
+  if (sessionInfo) {
+    info(`Prepared context: ${sessionInfo.sessionId}`);
+    info(`Started: ${sessionInfo.startedAt}`);
+    info(`Project: ${sessionInfo.projectName}`);
+  } else {
+    info('No prepared context found in this directory; finalizing what exists.');
+  }
   info('');
 
-  let summary = options.message;
-  if (!summary) {
-    summary = await promptForSummary();
-  }
-
-  if (summary) {
-    info(`Summary: ${summary}`);
-  } else {
-    info('No summary provided.');
-  }
-
-  await closeSession(projectDir, sessionInfo.sessionId, summary || undefined);
-
   if (options.export !== false) {
-    step('Exporting wiki (if export script available)');
+    step('Exporting wiki');
+    if (!exportWiki(projectDir)) {
+      warn('Wiki export did not complete; the project memory may be stale.');
+    }
   }
 
-  step('Restoring opencode.json');
-  const config = readOpenCodeConfig(projectDir);
-  if (config && config.instructions) {
-    const preludePath = `${PROJECT_STATE_DIR_NAME}/prelude.md`;
-    const idx = config.instructions.indexOf(preludePath);
-    if (idx !== -1) {
-      config.instructions.splice(idx, 1);
-      writeOpenCodeConfig(projectDir, config);
-      success('opencode.json restored (prelude reference removed)');
+  step('Cleaning up prepared context');
+  try {
+    const removed = clearPreparedContext(projectDir);
+    if (removed > 0) {
+      success(`Removed ${removed} prepared-context file(s)`);
     } else {
-      info('No prelude reference found in opencode.json');
+      info('Nothing to clean up');
     }
-  } else {
-    warn('opencode.json not found — skipping restore');
+  } catch (e: unknown) {
+    warn(`Failed to clean up prepared context: ${errorMessage(e)}`);
   }
 
-  step('Cleaning up prelude file');
-  const preludePath = statePath(projectDir, 'prelude.md');
-  const legacyPreludePath = join(projectDir, LEGACY_PROJECT_STATE_DIR_NAME, 'prelude.md');
-  if (existsSync(preludePath) || existsSync(legacyPreludePath)) {
-    try {
-      if (existsSync(preludePath)) unlinkSync(preludePath);
-      if (existsSync(legacyPreludePath)) unlinkSync(legacyPreludePath);
-      success('Prelude file removed');
-    } catch (e: any) {
-      warn(`Failed to remove prelude: ${e.message}`);
-    }
-  } else {
-    info('No prelude file to clean up');
+  let summary = options.message;
+  if (!summary && options.retrospective && process.stdin.isTTY) {
+    summary = await promptForSummary();
   }
 
   if (options.retrospective) {
     step('Generating session retrospective');
     const warnings: string[] = [];
     if (!existsSync(resolveGraphifyPaths(projectDir).graphJson)) {
-      warnings.push('Graphify report not found at session start');
+      warnings.push('Graphify report not found when the context was finalized');
     }
-    const retroContent = generateRetrospective(projectDir, sessionInfo, summary || '', warnings);
+    const startedAt = sessionInfo?.startedAt ? new Date(sessionInfo.startedAt) : undefined;
+    const retroContent = generateRetrospective(projectDir, summary || '', warnings, startedAt);
     const retroPath = saveRetrospective(projectDir, retroContent);
     success(`Retrospective saved: ${retroPath}`);
   }
 
-  heading('Session Finalized');
-  success(`Session ${sessionInfo.sessionId} closed`);
+  heading('Context Finalized');
+  success('Prepared context finalized');
   if (summary) {
     info(`Summary: ${summary}`);
   }

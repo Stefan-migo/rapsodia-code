@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, relative } from 'path';
 import { hashFile, hashDirectory, collectFiles, hashTemplateFile, TemplateOptions } from './template';
 import { stateDir, statePath, PROJECT_STATE_DIR_NAME } from '../utils/state';
@@ -28,9 +28,9 @@ export function generateManifest(targetDir: string, options: TemplateOptions): M
     path: relative(targetDir, fp).replace(/\\/g, '/'),
     hash: hashFile(fp),
   })).filter((f) => !f.path.startsWith(`${PROJECT_STATE_DIR_NAME}/`) && !f.path.startsWith('.git/')
-    // `init` writes the ignore files itself and npm never publishes a file named `.gitignore`,
-    // so tracking them can only ever report them as removed from the template.
-    && f.path !== '.gitignore' && f.path !== '.opencode/.gitignore');
+    // `init` writes the ignore file itself and npm never publishes a file named `.gitignore`,
+    // so tracking it can only ever report it as removed from the template.
+    && f.path !== '.gitignore');
 
   const manifest: Manifest = {
     templateVersion: CLI_VERSION,
@@ -73,7 +73,7 @@ export function detectChanges(
 ): { added: string[]; modified: string[]; userModified: string[]; deleted: string[] } {
   const excludedPaths = manifest.excludedPaths || [];
   const adoptedMergedPaths = manifest.excludedPaths && manifest.excludedPaths.length > 0
-    ? ['AGENTS.md', '.gitignore', 'opencode.json', '.opencode/opencode.json', '.opencode/templates/**']
+    ? ['AGENTS.md', '.gitignore']
     : [];
   const ignoredPaths = [...excludedPaths, ...adoptedMergedPaths];
   const templateFiles = collectFiles(templateDir, templateDir).filter((file) => !ignoredPaths.some((pattern) => {
@@ -110,7 +110,11 @@ export function detectChanges(
     const manifestHash = manifestFileMap.get(file);
 
     if (!manifestHash) {
-      added.push(file);
+      // A file the project already has but the manifest never recorded is the project's, not a new
+      // template file. Reporting it as new made `update` offer to write over it on a project
+      // created before that path shipped (a 1.0.0 AGENTS.md, for instance).
+      if (existsSync(projectPath)) userModified.push(file);
+      else added.push(file);
     } else if (templateHash !== manifestHash) {
       if (existsSync(projectPath)) {
         const currentHash = hashFile(projectPath);

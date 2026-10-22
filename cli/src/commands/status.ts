@@ -34,13 +34,14 @@ interface StatusReport {
     lastExport?: string;
   };
   tools: {
-    opencode: { installed: boolean; version?: string };
+    agent: { installed: boolean; version?: string };
     node: { installed: boolean; version?: string };
   };
 }
 
 function calculateDuration(startedAt: string): string {
   const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return 'unknown';
   const diff = Date.now() - start;
   const hours = Math.floor(diff / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
@@ -85,7 +86,7 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
     graphify: { exists: false },
     wiki: {},
     tools: {
-      opencode: { installed: false },
+      agent: { installed: false },
       node: { installed: false },
     },
   };
@@ -101,11 +102,15 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
     const sessionPath = resolveStatePath(projectDir, 'session.json');
     if (sessionPath && existsSync(sessionPath)) {
       try {
-        const session = JSON.parse(readFileSync(sessionPath, 'utf-8'));
-        report.session.active = true;
-        report.session.sessionId = session.sessionId;
-        report.session.startedAt = session.startedAt;
-        report.session.duration = calculateDuration(session.startedAt);
+        const session = JSON.parse(readFileSync(sessionPath, 'utf-8')) as Record<string, unknown>;
+        const sessionId = session.sessionId;
+        const startedAt = session.startedAt;
+        if (typeof sessionId === 'string' && typeof startedAt === 'string' && !Number.isNaN(Date.parse(startedAt))) {
+          report.session.active = true;
+          report.session.sessionId = sessionId;
+          report.session.startedAt = startedAt;
+          report.session.duration = calculateDuration(startedAt);
+        }
       } catch {}
     }
 
@@ -134,10 +139,10 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
     }
   }
 
-  const ocVersion = runTool('opencode', ['--version']);
-  if (ocVersion) {
-    report.tools.opencode.installed = true;
-    report.tools.opencode.version = ocVersion;
+  const agentVersion = runTool('gentle-shell', ['--version']);
+  if (agentVersion) {
+    report.tools.agent.installed = true;
+    report.tools.agent.version = agentVersion.split('\n')[0].trim();
   }
 
   const nodeVersion = runTool('node', ['--version']);
@@ -158,18 +163,18 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
   console.log('');
 
   if (report.session.active) {
-    console.log(`Session:     ${report.session.sessionId} (active, started ${report.session.duration} ago)`);
-    console.log(`  └ Run \`rapso close\` to finalize`);
+    console.log(`Prepared:    ${report.session.sessionId} (prepared ${report.session.duration} ago)`);
+    console.log(`  └ Run \`rapso close\` to export the wiki and clean up`);
   } else {
-    console.log(`Session:     — (none active)`);
+    console.log(`Context:     — (none prepared)`);
   }
   console.log('');
 
   const engramIcon = report.engram.connected ? '✅' : '⚠️';
-  const engramExtra = report.engram.connected
-    ? ` (v${report.engram.version}, ${report.engram.observationCount} observations in project)`
-    : ' (not connected)';
-  console.log(`Engram:      ${engramIcon} Connected${engramExtra}`);
+  const engramMsg = report.engram.connected
+    ? `Connected (${report.engram.version ? `v${report.engram.version}, ` : ''}${report.engram.observationCount ?? 0} observations in project)`
+    : 'Not connected';
+  console.log(`Engram:      ${engramIcon} ${engramMsg}`);
 
   const graphIcon = report.graphify.exists
     ? (report.graphify.stale === undefined ? '⚠️' : report.graphify.stale ? '⚠️' : '✅')
@@ -185,8 +190,8 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
   console.log(`Wiki:        ${wikiStr}`);
   console.log('');
 
-  const ocStr = report.tools.opencode.installed ? `✅ v${report.tools.opencode.version}` : '⚠️ Not installed';
-  console.log(`OpenCode:    ${ocStr}`);
+  const agentStr = report.tools.agent.installed ? `✅ ${report.tools.agent.version}` : '⚠️ Not installed';
+  console.log(`Agent:       ${agentStr}`);
 
   const nodeStr = report.tools.node.installed ? `✅ ${report.tools.node.version}` : '⚠️ Not installed';
   console.log(`Node:        ${nodeStr}`);

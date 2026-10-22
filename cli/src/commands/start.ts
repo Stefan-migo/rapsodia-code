@@ -1,6 +1,6 @@
 import { spawn } from '../utils/exec';
 import { info, success, warn, error, heading } from '../utils/logger';
-import { generateSessionId, openSession, getSessionInfo } from '../engine/session';
+import { generateSessionId, prepareContext } from '../engine/session';
 import { buildPrelude } from '../engine/context';
 import { findProjectRoot, readProjectName } from '../engine/project';
 import { migrateLegacyState, PROJECT_STATE_DIR_NAME } from '../utils/state';
@@ -8,11 +8,13 @@ import { migrateLegacyState, PROJECT_STATE_DIR_NAME } from '../utils/state';
 interface StartOptions {
   prelude?: boolean;
   dryRun?: boolean;
-  open?: boolean;
+  run?: boolean;
 }
 
+const DEFAULT_AGENT = 'gentle-shell';
+
 export async function startCommand(options: StartOptions): Promise<void> {
-  heading('Rapsodia Session Start');
+  heading('Rapsodia Context Start');
 
   const projectDir = findProjectRoot(process.cwd());
   if (!projectDir) {
@@ -20,100 +22,86 @@ export async function startCommand(options: StartOptions): Promise<void> {
     process.exit(1);
   }
 
-  for (const move of migrateLegacyState(projectDir)) info(`State migration: ${move}`);
-
   const projectName = readProjectName(projectDir);
   info(`Project: ${projectName}`);
   info(`Directory: ${projectDir}`);
 
-  const existingSession = getSessionInfo(projectDir);
-  if (existingSession) {
-    warn(`Active session found: ${existingSession.sessionId}`);
-    info('Run `rapso close` to finalize it before starting a new one.');
-    if (!process.stdin.isTTY) {
-      error('Cannot confirm starting another session without an interactive terminal.');
-      process.exit(1);
-    }
-    const proceed = await new Promise<boolean>((resolve) => {
-      process.stdout.write('Start a new session anyway? (y/N): ');
-      process.stdin.once('data', (data) => {
-        const answer = data.toString().trim().toLowerCase();
-        resolve(answer === 'y' || answer === 'yes');
-      });
-    });
-    if (!proceed) {
-      info('Aborted.');
-      process.exit(0);
-    }
-  }
-
-  const sessionId = generateSessionId();
-  info(`Session ID: ${sessionId}`);
+  const agent = process.env.RAPSO_AGENT || DEFAULT_AGENT;
 
   if (options.dryRun) {
     heading('Dry Run — No Actions Taken');
     info('The following would happen:');
-    info('  1. Generate session ID');
-    info('  2. Open Engram session via MCP (mem_session_start)');
-    info(`  3. Write ${PROJECT_STATE_DIR_NAME}/session.json`);
+    info('  1. Generate the prepared-context id');
+    info(`  2. Write ${PROJECT_STATE_DIR_NAME}/session.json (local state, no Engram session)`);
     if (options.prelude !== false) {
-      info(`  4. Build context prelude (${PROJECT_STATE_DIR_NAME}/prelude.md):`);
+      info(`  3. Build context prelude (${PROJECT_STATE_DIR_NAME}/prelude.md):`);
       info('     - Engram recent context');
       info('     - Graphify codebase report');
       info('     - Project manifest info');
-      info(`  5. Keep the prelude in ignored ${PROJECT_STATE_DIR_NAME}/ local state`);
     } else {
-      info('  4. Skip context prelude (--no-prelude)');
+      info('  3. Skip context prelude (--no-prelude)');
     }
-    info(`  ${options.prelude !== false ? 6 : 5}. Launch opencode in project directory`);
-    info('  7. After opencode exits, print finalization instructions');
+    if (options.run) {
+      info(`  ${options.prelude !== false ? 4 : 3}. Launch ${agent}`);
+    } else {
+      info('  Run the agent yourself, or pass --run to launch it.');
+    }
     return;
   }
 
-  await openSession(projectDir, sessionId);
+  const sessionId = generateSessionId();
+  info(`Context: ${sessionId}`);
+
+  for (const move of migrateLegacyState(projectDir)) info(`State migration: ${move}`);
+
+  prepareContext(projectDir, sessionId, projectName);
 
   if (options.prelude !== false) {
     await buildPrelude(projectDir, projectName);
   }
 
-  if (options.open === false) {
-    heading('Session Prepared (--no-open)');
-    success('Session started without launching OpenCode');
-    info(`Session ID: ${sessionId}`);
-    info('Run `opencode` manually, then `rapso close` when done.');
+  if (!options.run) {
+    heading('Context Prepared');
+    success('Prepared the project context without launching an agent');
+    info(`Context: ${sessionId}`);
+    if (options.prelude !== false) {
+      info(`Prelude: ${PROJECT_STATE_DIR_NAME}/prelude.md`);
+      info('Open your agent (gentle-shell) and read the prelude before the first task.');
+    } else {
+      info('No prelude was built (--no-prelude); open your agent when ready.');
+    }
+    info('Run `rapso close` when done to export the wiki and clean up.');
     return;
   }
 
   if (!process.stdout.isTTY) {
-    warn('Not a TTY terminal — OpenCode may not display correctly.');
-    warn('Use --no-open to prepare the session without launching.');
+    warn('Not a TTY terminal — the agent may not display correctly.');
   }
 
-  heading('Launching OpenCode');
-  info(`Session: ${sessionId}`);
-  info('OpenCode will open in the project directory.');
+  heading(`Launching ${agent}`);
+  info(`Context: ${sessionId}`);
   info('');
 
-  const child = spawn('opencode', [], {
+  const child = spawn(agent, [], {
     cwd: projectDir,
     stdio: 'inherit',
     env: { ...process.env },
   });
 
   child.on('error', (err: Error) => {
-    error(`Failed to launch OpenCode: ${err.message}`);
-    info('Make sure OpenCode is installed and available on PATH.');
+    error(`Failed to launch ${agent}: ${err.message}`);
+    info('Set RAPSO_AGENT to an agent binary available on PATH.');
     process.exit(1);
   });
 
   child.on('exit', (code: number | null) => {
-    heading('Session End');
+    heading('Agent Exited');
     if (code === 0) {
-      success('OpenCode session completed');
+      success(`${agent} completed`);
     } else {
-      warn(`OpenCode exited with code ${code}`);
+      warn(`${agent} exited with code ${code}`);
     }
-    info('Run `rapso close` to finalize the session.');
+    info('Run `rapso close` to export the wiki and finalize the prepared context.');
     process.exit(code === null ? 1 : code);
   });
 }

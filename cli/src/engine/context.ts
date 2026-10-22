@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'fs';
 import { execFileSync, resolvePythonCommand } from '../utils/exec';
 import { info, warn, step, success } from '../utils/logger';
 import { MCPClient } from '../utils/mcp';
@@ -168,7 +168,10 @@ async function fetchGraphifyContext(projectDir: string, projectName: string): Pr
             date: new Date(),
           });
         }
-      } catch {}
+      } catch {
+        // A failed tool call is not worth the prelude: say it was partial and keep going.
+        warn('Graphify graph query unavailable — the prelude continues without it');
+      }
 
       try {
         const godResult = await client.callTool('god_nodes', { top_n: 5 });
@@ -183,7 +186,9 @@ async function fetchGraphifyContext(projectDir: string, projectName: string): Pr
             date: new Date(),
           });
         }
-      } catch {}
+      } catch {
+        warn('Graphify god nodes unavailable — the prelude continues without it');
+      }
     } finally {
       await client.close();
     }
@@ -327,7 +332,17 @@ export async function buildPrelude(projectDir: string, projectName: string): Pro
   }
 
   const preludePath = statePath(projectDir, 'prelude.md');
-  writeFileSync(preludePath, sections.join('\n'), 'utf-8');
+  // A session-start refresh can run while the agent reads the prelude, so the reader must never see
+  // a half-written file: write beside it and swap it in one rename. The pid keeps two concurrent
+  // refreshes from sharing a temporary path.
+  const tempPath = `${preludePath}.${process.pid}.tmp`;
+  try {
+    writeFileSync(tempPath, sections.join('\n'), 'utf-8');
+    renameSync(tempPath, preludePath);
+  } catch (err) {
+    try { unlinkSync(tempPath); } catch { /* the temporary file may never have been created */ }
+    throw err;
+  }
   success(`Prelude written to ${preludePath}`);
   return preludePath;
 }

@@ -1,205 +1,95 @@
 # Rapsodia 2.5 — System Map
 
-How every component of the Rapsodia 2.5 executive system works, when to use it, and how to maintain it.
+How Rapsodia, Pi, Engram, Graphify, and the project files relate.
 
 ---
 
 ## Architecture
 
 ```
-                         ┌──────────────────────────┐
-                         │  FRONTAL LOBE (Planning) │
-                         │  ODD + SDD on request    │
-                         │  task doc + SDD artifacts│
-                         │  @Rapso-Planner          │
-                         └──────────┬───────────────┘
-                                    │ hands off change
-          ┌─────────────────────────┼──────────────────────────┐
-          │                         │                          │
-   ┌──────▼──────────┐    ┌───────▼──────────┐    ┌─────────▼─────────┐
-   │  PARIETAL LOBE   │    │  HIPPOCAMPUS     │    │ OCCIPITAL LOBE    │
-   │  (Spatial)       │    │  (Memory)        │    │ (Archive)         │
-   │                   │    │                   │    │                   │
-   │  Graphify        │    │  Engram MCP      │    │  wiki/ (export)   │
-   │  query_graph     │    │  mem_save/search │    │  .md snapshots    │
-   │  god_nodes       │    │  mem_judge       │    │  from Engram      │
-   │  graph.json      │    │  session lifecycle│   │                   │
-   └──────────────────┘    └───────────────────┘    └──────────────────┘
-                                    │
-                                    │
-   @Rapso-Developer (executes across all lobes via 5-Step Gate)
+                        ┌──────────────────────────────┐
+                        │ Pi project runtime           │
+                        │ AGENTS.md + trusted resources│
+                        │ Skills + extensions + MCP    │
+                        └──────────────┬───────────────┘
+                                       │ first user run points to
+                                       ▼
+                        ┌──────────────────────────────┐
+                        │ .rapsodia-code/prelude.md    │
+                        │ context built by rapso       │
+                        └──────────────┬───────────────┘
+                                       │
+          ┌────────────────────────────┼──────────────────────────┐
+          │                            │                          │
+   ┌──────▼──────────┐       ┌────────▼─────────┐      ┌─────────▼─────────┐
+   │ Graphify        │       │ Engram           │      │ Rapsodia CLI      │
+   │ Code graph      │       │ Session lifecycle│      │ Prepared context │
+   │ context in      │       │ owned by         │      │ and wiki export   │
+   │ the prelude     │       │ gentle-engram    │      │                   │
+   └─────────────────┘       └──────────────────┘      └───────────────────┘
 ```
 
-## Identity Quick Reference
-
-```
-┌──────────────────┬──────────────────────┬────────────────────┐
-│   IDENTITY       │  @Rapso-Planner     │ @Rapso-Developer  │
-├──────────────────┼──────────────────────┼────────────────────┤
-│   Permissions    │  Read-only + research│ Full (edit, bash)  │
-│   Model          │  Claude Sonnet 4     │ Claude Sonnet 4    │
-│   Primary tool   │ rapso-session        │ ODD task doc       │
-│   Memory         │  mem_session_start   │ mem_save results   │
-│   Code access    │  Read only           │ Edit + write       │
-│   When to use    │  Planning, research  │ Building, testing  │
-└──────────────────┴──────────────────────┴────────────────────┘
-```
+Rapsodia prepares local project context and reads Engram context for the prelude. Pi is the agent runtime. `gentle-engram` owns Engram session start, summaries, and passive capture. `rapso start` and `rapso close` do not open or end an Engram session.
 
 ---
 
-## 1. FRONTAL LOBE — ODD (default) + Gentle AI SDD (opt-in)
+## Pi Project Surface
 
-**What it is:** ODD is the default workflow. Gentle AI SDD is a structured spec-driven development workflow available on explicit request. Specs define WHAT before HOW.
-
-**Commands (invoked by @Rapso-Planner):**
-
-| Command | Purpose | Output |
-|---------|---------|--------|
-| `rapso-session` skill | Structure planning discussions | Session context |
-| `/sdd-new` | Start a structured change | Change proposal |
-| `/sdd-ff` | Fast-forward planning | Spec, design, and tasks artifacts |
-| `/sdd-status` | Check change state | Current change status |
-| `/sdd-apply` | Execute the change tasks | Code and apply progress |
-| `/sdd-verify` | Verify the implementation and artifacts | Verify report |
-| `/sdd-archive` | Close and preserve a completed change | Archive report |
-
-**When to use:** ODD is the default for every feature. Gentle AI SDD is entered only when explicitly requested or when a proposal is accepted.
-
----
-
-## 2. PARIETAL LOBE — Graphify (Code Understanding)
-
-**What it is:** A knowledge graph that shows how everything in your codebase connects.
-
-**Commands:**
-
-| Command | When |
+| Resource | Role |
 |---------|------|
-| `{PYTHON_COMMAND} -m graphify.serve graphify-out/graph.json` | Start graph MCP server |
-| `query_graph` | Query for relevant nodes before editing |
-| `god_nodes` | Find highest-degree concepts |
-| `/graphify . --update` | Rebuild graph after code changes |
+| `AGENTS.md` | Project instructions Pi reads natively; includes the prelude-reading fallback |
+| `.agents/skills/` | Project skills; the template ships `rapso-session` and `design-system` |
+| `.pi/extensions/` | Project extensions; the template ships `.pi/extensions/rapsodia-context.ts` |
+| `.pi/mcp.json` | Optional project MCP server configuration; only active after project trust is granted |
+| `.rapsodia-code/` | Local ignored state, including `session.json` and `prelude.md` |
 
-**Output:** `graphify-out/` — graph.html, GRAPH_REPORT.md, graph.json
+### Context extension lifecycle
 
-**Mandatory use:** BEFORE every code edit session, run query_graph to understand what you're touching.
-
----
-
-## 3. HIPPOCAMPUS — Engram (Memory)
-
-**What it is:** Persistent SQLite memory with FTS5 search, session lifecycle, and conflict detection.
-
-**Tools (19 MCP tools):**
-
-| Category | Tools |
-|----------|-------|
-| Save | `mem_save`, `mem_update`, `mem_delete`, `mem_suggest_topic_key` |
-| Search | `mem_search`, `mem_context`, `mem_timeline`, `mem_get_observation` |
-| Sessions | `mem_session_start`, `mem_session_end`, `mem_session_summary`, `mem_save_prompt` |
-| Utilities | `mem_stats`, `mem_doctor`, `mem_capture_passive`, `mem_current_project` |
-| Conflict | `mem_judge`, `mem_compare`, `mem_merge_projects` |
-
-**Always save:** decisions, bugfixes, patterns, architecture insights, discoveries, learnings.
+The `rapsodia-context` extension runs on Pi session start when project trust allows it to load. It searches for the project state and refreshes `.rapsodia-code/prelude.md` in the background only when the prelude is missing or at least five minutes old. It gives `rapso context` 60 seconds. It is silent if `rapso` is missing or does not recognize that command. On the first user run of the session, it adds a `rapso_context` prompt section pointing to the prelude. It does not open an Engram session. Without project trust, the extension does not load; `AGENTS.md` instructs Pi to read the prelude as the fallback.
 
 ---
 
-## 4. OCCIPITAL LOBE — Wiki (Obsidian Archive)
+## Rapsodia CLI and State
 
-**What it is:** An Obsidian-readable snapshot of Engram memory. Generated at session end via `scripts/engram-export-wiki.sh`.
+| Command | Effect |
+|---------|--------|
+| `rapso start` | Writes `.rapsodia-code/session.json` and builds `.rapsodia-code/prelude.md` unless `--no-prelude`; by default launches no agent. `--run` opts into launching `RAPSO_AGENT` (default `gentle-shell`). Supports `--dry-run`. |
+| `rapso context` | Builds only the prelude. Writes no prepared-context record and launches no agent. Supports `--dry-run`. |
+| `rapso close` | Exports the wiki by default, cleans prepared context, and can write a retrospective with `--retrospective`; supports `--message` and `--no-export`. Does not end an Engram session. |
+| `rapso status` | Reports prepared-context state and the `gentle-shell` agent, alongside project, Engram, Graphify, wiki, and Node status. |
+| `rapso install` | Checks dependencies and prints installation steps; it does not install them. |
+| `rapso init`, `update`, `adopt`, `analyze`, `worktree` | Scaffold, update, adopt, analyze, and manage projects/worktrees respectively. |
 
-**Structure:**
-```
-wiki/
-├── index.md       — Auto-generated catalog
-├── log.md         — Chronological export log
-├── concepts/      — Technology & domain concepts
-├── entities/      — Code entities
-├── sources/       — Source document summaries
-├── sessions/      — Session summaries
-├── decisions/     — ADRs
-├── dashboards/    — Automated overviews
-└── graph/         — Graphify output (separate)
-```
+The complete command set is `init`, `install`, `start`, `context`, `close`, `status`, `update`, `adopt`, `analyze`, and `worktree`. `rapso start` has no `--no-open` option.
 
-**Export lifecycle:** Engram → `engram export` → `render-engram-to-wiki.mjs` → `wiki/` .md files.
+`.rapsodia-code/` is local ignored state rather than a Pi plugin directory. `rapso start` prepares a local context record; it does not start a Pi or Gentle Shell session unless `--run` is explicitly supplied to launch the configured agent.
 
 ---
 
-## 5. EXECUTION DISCIPLINE (5-Step Gate + Git Hook)
+## Graphify — Code Graph
 
-### 5-Step Gate (built into @Rapso-Developer prompt)
-```
-Step 1: GRAPH CHECK — query_graph before any edit
-Step 2: ATOMIC COMMIT — one concern per commit, ≤5 files
-Step 3: VERIFY — the project's configured checks (never claim one that does not exist)
-Step 4: SPEC CHECK — only when SDD was explicitly used; /sdd-verify is optional diagnostics
-Step 5: MEMORY — mem_save key learnings
+Graphify remains the project's code graph. The CLI can read graph context while building the prelude. Refresh the graph with:
+
+```bash
+graphify . --update
 ```
 
-### Git Hook (structural enforcement)
-`.git/hooks/pre-commit` rejects commits touching >5 files. Keeps atomic discipline mechanical, not just aspirational.
+An optional Graphify MCP server can be configured in `.pi/mcp.json`; project trust is required for project MCP configuration. The graph is separate from Engram's persistent memory and the exported `wiki/` snapshot.
 
 ---
 
-## 6. CODE-SANDBOX (execute_script)
+## Engram — Memory
 
-**What it is:** A tool that runs TypeScript/JavaScript in a Node.js sandbox for multi-step logic.
-
-**When to use:**
-- Prototyping algorithms
-- Data transformation / validation
-- Running multi-step logic that's impractical as one-liner bash
-- Testing TypeScript snippets
-
-**How to use:** Pass a TypeScript/JS string. Returns stdout.
+`gentle-engram` owns Engram session start, summaries, and passive capture. Rapsodia reads Engram context to build `.rapsodia-code/prelude.md`; it does not own or close the Engram session.
 
 ---
 
-## Quick Reference Card
+## Wiki — Obsidian Archive
 
-```
-┌──────────────────┬──────────────────────┬──────────────────────┐
-│   COMPONENT      │    HOW TO USE        │     WHEN TO USE      │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ RAPSO-PLANNER    │ Switch to Tab        │ Planning, spec,      │
-│                  │                      │ research, memory     │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ RAPSO-DEVELOPER  │ Switch to Tab        │ Building, testing,   │
-│                  │                      │ implementing specs   │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ ODD (default)    │ rapso-session + doc  │ Every feature task   │
-│ Frontal Lobe     │ SDD: explicit request│                      │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ GRAPHFY          │ query_graph before   │ Before editing,      │
-│ Parietal Lobe    │ every edit           │ after refactors      │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ ENGRAM           │ mem_save / search    │ Every session        │
-│ Hippocampus      │ mem_session_start    │ start/end + on       │
-│                  │ mem_session_end      │ discovery            │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ WIKI (archive)   │ Read .md files       │ Reference, reading   │
-│ Occipital Lobe   │                      │ (not for writing)    │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ 5-STEP GATE      │ Automatic in         │ Every task           │
-│                  │ Developer prompt     │                      │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ GIT HOOK         │ Automatic on commit  │ Every commit         │
-│ pre-commit       │                      │                      │
-├──────────────────┼──────────────────────┼──────────────────────┤
-│ CODE-SANDBOX     │ execute_script       │ Multi-step logic     │
-│                  │ tool                 │ prototyping          │
-└──────────────────┴──────────────────────┴──────────────────────┘
-```
+`rapso close` exports the wiki by default; `--no-export` skips that step. The wiki is an Obsidian-readable snapshot of Engram memory and remains separate from the prepared context and Graphify code graph.
 
 ---
 
-## How to Maintain
+## Retired Files and Tools
 
-| Component | Maintenance |
-|-----------|-------------|
-| Engram | Data is persistent. Run `engram export` for backups. |
-| Graphify | Re-run after major refactors: `/graphify . --update` |
-| Gentle AI SDD | The dispatcher manages change artifacts. Update the SDD workflow as it evolves. |
-| Wiki | Auto-generated. Only maintain export script. |
-| Git hooks | `.git/hooks/pre-commit` — edit threshold as needed. |
+The OpenCode tree (`.opencode/`), root `opencode.json`, `rapso-planner` and `rapso-developer` agents, Ponytail skill pack, SDD (`openspec/` and `/sdd-*`), `rapso-persona`, and `scripts/setup.sh` are retired and are not part of this Pi runtime. `rapso adopt` and `rapso update` do not delete retired files. They may report paths that need attention; review those reports and remove obsolete files yourself if desired.

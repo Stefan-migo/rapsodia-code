@@ -2,9 +2,9 @@
 # rapso-sync.sh — push the Rapsodia pack into every project on your list.
 #
 # For each project it:
-#   1. Installs the six skills the pack owns into <project>/.opencode/skills/, and removes the
-#      stale directory of any skill the pack has renamed (cortex-persona, cortex-session).
-#      A pack skill outside that list does not travel.
+#   1. Installs the skills the pack owns into <project>/.agents/skills/ and the Pi extension into
+#      <project>/.pi/extensions/. A pack skill outside that list does not travel. Retired pack
+#      skills are reported, never removed: `rapso adopt` owns consumer migration.
 #   2. Repairs the legacy Cortex references in <project>/AGENTS.md.
 #   3. Migrates legacy flat session directories into open|ready-for-odd|archived.
 #
@@ -41,43 +41,52 @@ run() {
 # Copy the pack's skills over the project's copies. Project-local skills that
 # the pack does not own (e.g. component-adapter) are left untouched.
 sync_skills() {
-  local target="$1/.opencode/skills"
-  [[ -d "$target" ]] || { echo "  - no .opencode/skills, skipped"; return 0; }
+  local target="$1/.agents/skills"
+  [[ -d "$target" ]] || { echo "  - no .agents/skills, skipped"; return 0; }
   local name src dest
-  local -a pack_skills=(rapso-persona rapso-session ponytail-review ponytail-audit ponytail-debt ponytail-help)
-  local -a installed=()
+  local -a pack_skills=(rapso-session design-system)
   for name in "${pack_skills[@]}"; do
     # The skills live in the CLI template, the one store the published package ships.
-    src="$PACK_DIR/cli/src/template/.opencode/skills/$name"
+    src="$PACK_DIR/cli/src/template/.agents/skills/$name"
     if [[ ! -f "$src/SKILL.md" ]]; then
       echo "    missing pack skill: $name"
       continue
     fi
     dest="$target/$name"
     if [[ -f "$dest/SKILL.md" && ! -L "$dest" ]] && cmp -s "$src/SKILL.md" "$dest/SKILL.md"; then
-      installed+=("$name")
       continue
     fi
     [[ -L "$dest" ]] && run rm -f "$dest"
     run mkdir -p "$dest"
     run cp "$src/SKILL.md" "$dest/SKILL.md"
     echo "    skill: $name"
-    installed+=("$name")
   done
-  for name in "${installed[@]}"; do
-    case "$name" in
-      rapso-persona) dest="$target/cortex-persona" ;;
-      rapso-session) dest="$target/cortex-session" ;;
-      *) continue ;;
-    esac
-    if [[ -L "$dest" ]]; then
-      run rm -f "$dest"
-      echo "    stale skill removed: $(basename "$dest")"
-    elif [[ -d "$dest" ]]; then
-      run rm -rf "$dest"
-      echo "    stale skill removed: $(basename "$dest")"
+  for name in rapso-persona ponytail-review ponytail-audit ponytail-debt ponytail-help bootstrap; do
+    # An `if` and not `[[ ]] && echo`: a failing last test made this function return 1, and
+    # `set -e` then aborted the whole run before AGENTS.md repair and session migration.
+    if [[ -e "$target/$name" || -L "$target/$name" ]]; then
+      echo "    retired pack skill present (adopt owns its removal): $name"
     fi
   done
+  return 0
+}
+
+# The extension is part of the pack: without it a trusted project never refreshes its prelude on
+# session start, and the AGENTS.md rule is the only path left.
+sync_extension() {
+  local target="$1/.pi/extensions"
+  local src="$PACK_DIR/cli/src/template/.pi/extensions/rapsodia-context.ts"
+  local dest="$target/rapsodia-context.ts"
+  if [[ ! -f "$src" ]]; then
+    echo "    missing pack extension: rapsodia-context.ts"
+    return 0
+  fi
+  if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
+    return 0
+  fi
+  run mkdir -p "$target"
+  run cp "$src" "$dest"
+  echo "    extension: rapsodia-context.ts"
 }
 
 repair_agents() {
@@ -221,6 +230,7 @@ while IFS= read -r raw || [[ -n "$raw" ]]; do
     continue
   fi
   sync_skills "$project"
+  sync_extension "$project"
   repair_agents "$project"
   migrate_sessions "$project"
   echo

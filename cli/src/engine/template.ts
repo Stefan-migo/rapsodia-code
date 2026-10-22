@@ -1,8 +1,8 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, relative, basename, extname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, lstatSync, readdirSync, statSync } from 'fs';
+import { join, relative, basename, extname, sep } from 'path';
 import { createHash } from 'crypto';
 import { PROJECT_STATE_DIR_NAME } from '../utils/state';
-import { resolvePythonCommand } from '../utils/exec';
+import { pythonCommand } from '../utils/exec';
 
 export interface TemplateOptions {
   projectName: string;
@@ -31,17 +31,6 @@ function kebabCase(str: string): string {
     .toLowerCase();
 }
 
-/**
- * The interpreter a generated project names for the Graphify MCP server. opencode launches that
- * command itself, so a hardcoded name cannot be right on both platforms: `python3` is a Microsoft
- * Store App Execution Alias on Windows and is not guaranteed to be a working interpreter there.
- *
- * Falling back to `python3` keeps the POSIX output byte-identical when nothing resolves.
- */
-function pythonCommand(): string {
-  return resolvePythonCommand() ?? (process.platform === 'win32' ? 'python' : 'python3');
-}
-
 export function substituteVariables(content: string, options: TemplateOptions): string {
   return content
     .replace(/\{PROJECT_NAME\}/g, options.projectName)
@@ -54,8 +43,8 @@ export function substituteVariables(content: string, options: TemplateOptions): 
 /**
  * The one place the text/binary rule lives. `copyTemplate`, `hashTemplateFile` and `update` all
  * project through it, so the hash recorded for a generated file is the hash of the bytes that were
- * actually written; resolving the substitution anywhere else would make every project report
- * `opencode.json` as modified forever.
+ * actually written; resolving the substitution anywhere else would make every project report a
+ * placeholder-bearing file as modified forever.
  *
  * `substituteVariables` resolves the interpreter lazily, per match, so the probe runs for the one
  * file that carries the placeholder instead of once per template file per loop.
@@ -80,8 +69,30 @@ export function collectFiles(dir: string, baseDir: string): string[] {
   return files;
 }
 
-export function copyTemplate(targetDir: string, options: TemplateOptions): string[] {
-  const copiedFiles: string[] = [];
+/**
+ * `mkdirSync` and `writeFileSync` follow symlinks, so a link planted inside the target directory
+ * would redirect a template write outside it. A template write is never worth that: refuse the
+ * path and report it instead.
+ */
+function staysInsideTarget(targetDir: string, targetPath: string): boolean {
+  const relativePath = relative(targetDir, targetPath);
+  if (relativePath === '' || relativePath.startsWith('..')) return false;
+  let current = targetDir;
+  for (const part of relativePath.split(sep)) {
+    current = join(current, part);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return false;
+    } catch {
+      // The component does not exist yet, so neither do the ones below it.
+      return true;
+    }
+  }
+  return true;
+}
+
+export function copyTemplate(targetDir: string, options: TemplateOptions): { copied: string[]; refused: string[] } {
+  const copied: string[] = [];
+  const refused: string[] = [];
   const allFiles = collectFiles(TEMPLATE_DIR, TEMPLATE_DIR);
 
   for (const file of allFiles) {
@@ -89,14 +100,19 @@ export function copyTemplate(targetDir: string, options: TemplateOptions): strin
     const targetPath = join(targetDir, file);
     const targetParent = join(targetPath, '..');
 
+    if (!staysInsideTarget(targetDir, targetPath)) {
+      refused.push(file);
+      continue;
+    }
+
     mkdirSync(targetParent, { recursive: true });
 
     writeFileSync(targetPath, projectTemplateFile(sourcePath, options));
 
-    copiedFiles.push(file);
+    copied.push(file);
   }
 
-  return copiedFiles;
+  return { copied, refused };
 }
 
 export function hashFile(filePath: string): string {
