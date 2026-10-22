@@ -64,8 +64,12 @@ export async function startCommand(options: StartOptions): Promise<void> {
     heading('Context Prepared');
     success('Prepared the project context without launching an agent');
     info(`Context: ${sessionId}`);
-    info(`Prelude: ${PROJECT_STATE_DIR_NAME}/prelude.md`);
-    info('Open your agent (gentle-shell) and read the prelude before the first task.');
+    if (options.prelude !== false) {
+      info(`Prelude: ${PROJECT_STATE_DIR_NAME}/prelude.md`);
+      info('Open your agent (gentle-shell) and read the prelude before the first task.');
+    } else {
+      info('No prelude was built (--no-prelude); open your agent when ready.');
+    }
     info('Run `rapso close` when done to export the wiki and clean up.');
     return;
   }
