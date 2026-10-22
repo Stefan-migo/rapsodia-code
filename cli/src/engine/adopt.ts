@@ -1,5 +1,5 @@
 import { execFileSync } from '../utils/exec';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
 import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
@@ -83,10 +83,16 @@ function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): 
 
   for (const root of RETIRED_ROOTS) {
     const absolute = join(targetDir, root);
-    if (!existsSync(absolute)) continue;
+    let stat;
+    // `existsSync` answers false for a broken symlink, which would hide it from the plan; `lstat`
+    // distinguishes "absent" from "present but dangling".
+    try {
+      stat = lstatSync(absolute);
+    } catch {
+      continue;
+    }
     // `.opencode` is expanded so each skill stays visible next to the ones Rapsodia wrote. A
     // symlinked root is reported as one entry and never expanded: its contents are not ours.
-    const stat = lstatSync(absolute);
     if (root !== '.opencode' || stat.isSymbolicLink() || !stat.isDirectory()) {
       record(absolute);
       continue;
