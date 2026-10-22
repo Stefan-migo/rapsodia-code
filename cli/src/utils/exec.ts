@@ -1,4 +1,4 @@
-import { accessSync, constants } from 'fs';
+import { accessSync, constants, statSync } from 'fs';
 import { ChildProcess, SpawnOptions, ExecFileSyncOptions, SpawnSyncOptions } from 'child_process';
 import crossSpawn from 'cross-spawn';
 import { delimiter, isAbsolute, join } from 'path';
@@ -9,6 +9,8 @@ function pathEntries(): string[] {
 
 function isFile(path: string): boolean {
   try {
+    // X_OK is also true for an executable directory on POSIX, and a directory is never a command.
+    if (!statSync(path).isFile()) return false;
     accessSync(path, constants.X_OK);
     return true;
   } catch {
@@ -79,6 +81,15 @@ export function resolvePythonCommand(): string | null {
     : commandAvailable;
   resolvedPython = candidates.find(usable) ?? null;
   return resolvedPython;
+}
+
+/**
+ * The interpreter name a caller should spawn. `resolvePythonCommand` reports what exists;
+ * callers that cannot fail (template substitution, generated scripts) still need a name, and the
+ * POSIX fallback keeps their output byte-identical when nothing resolves.
+ */
+export function pythonCommand(): string {
+  return resolvePythonCommand() ?? (process.platform === 'win32' ? 'python' : 'python3');
 }
 
 interface ExecFileSyncError extends Error {

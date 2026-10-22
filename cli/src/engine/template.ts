@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSy
 import { join, relative, basename, extname } from 'path';
 import { createHash } from 'crypto';
 import { PROJECT_STATE_DIR_NAME } from '../utils/state';
-import { resolvePythonCommand } from '../utils/exec';
+import { pythonCommand } from '../utils/exec';
 
 export interface TemplateOptions {
   projectName: string;
@@ -31,17 +31,6 @@ function kebabCase(str: string): string {
     .toLowerCase();
 }
 
-/**
- * The interpreter a generated project names for the Graphify MCP server. opencode launches that
- * command itself, so a hardcoded name cannot be right on both platforms: `python3` is a Microsoft
- * Store App Execution Alias on Windows and is not guaranteed to be a working interpreter there.
- *
- * Falling back to `python3` keeps the POSIX output byte-identical when nothing resolves.
- */
-function pythonCommand(): string {
-  return resolvePythonCommand() ?? (process.platform === 'win32' ? 'python' : 'python3');
-}
-
 export function substituteVariables(content: string, options: TemplateOptions): string {
   return content
     .replace(/\{PROJECT_NAME\}/g, options.projectName)
@@ -54,8 +43,8 @@ export function substituteVariables(content: string, options: TemplateOptions): 
 /**
  * The one place the text/binary rule lives. `copyTemplate`, `hashTemplateFile` and `update` all
  * project through it, so the hash recorded for a generated file is the hash of the bytes that were
- * actually written; resolving the substitution anywhere else would make every project report
- * `opencode.json` as modified forever.
+ * actually written; resolving the substitution anywhere else would make every project report a
+ * placeholder-bearing file as modified forever.
  *
  * `substituteVariables` resolves the interpreter lazily, per match, so the probe runs for the one
  * file that carries the placeholder instead of once per template file per loop.
