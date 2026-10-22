@@ -36,7 +36,7 @@ function gitPath(root: string, args: string[]): string {
   return resolve(root, git(root, args));
 }
 
-const CANONICAL_SKILLS = ['rapso-persona', 'rapso-session', 'ponytail-review', 'ponytail-audit', 'ponytail-debt', 'ponytail-help'];
+const CANONICAL_SKILLS = ['rapso-session', 'design-system'];
 
 function symlinkOrCopy(source: string, link: string, recursive: boolean, symlinkTarget = relative(dirname(link), source)): void {
   try {
@@ -49,12 +49,10 @@ function symlinkOrCopy(source: string, link: string, recursive: boolean, symlink
 }
 
 // The canonical skills live in the CLI template, because that is the only store the published
-// package ships. They used to live in `<repo>/skills/`, which `cli/package.json` never carried, so
-// a project created by `rapso init` received none of them. Resolving the source against the new
-// worktree produced links that only resolved inside Rapsodia, after deleting whatever already
-// occupied the destination.
+// package ships. Pi reads a project's skills from `.agents/skills/`, so that is where both the
+// generated project and a provisioned worktree keep them.
 function canonicalSkillsRoot(root: string): string | null {
-  const canonical = join(root, 'cli', 'src', 'template', '.opencode', 'skills');
+  const canonical = join(root, 'cli', 'src', 'template', '.agents', 'skills');
   return CANONICAL_SKILLS.some((name) => existsSync(join(canonical, name, 'SKILL.md'))) ? canonical : null;
 }
 
@@ -206,8 +204,8 @@ function refreshRegistry(worktree: string, mainRoot: string): void {
     execFileSync('gentle-ai', ['skill-registry', 'refresh', '--cwd', worktree], { cwd: worktree, stdio: 'ignore' });
   } else {
     const rows = CANONICAL_SKILLS
-      .filter((name) => existsSync(join(worktree, '.opencode', 'skills', name, 'SKILL.md')))
-      .map((name) => `| ${name} | ${join(worktree, '.opencode', 'skills', name, 'SKILL.md')} | project |`)
+      .filter((name) => existsSync(join(worktree, '.agents', 'skills', name, 'SKILL.md')))
+      .map((name) => `| ${name} | ${join(worktree, '.agents', 'skills', name, 'SKILL.md')} | project |`)
       .join('\n');
     mkdirSync(join(worktree, '.atl'), { recursive: true });
     writeFileSync(join(worktree, '.atl', 'skill-registry.md'), `# Skill Registry — worktree\n\nSource: ${mainRoot}\n\n| Name | Path | Scope |\n|------|------|-------|\n${rows}\n`);
@@ -229,17 +227,11 @@ export function provisionWorktree(worktree: string, mainRoot: string): void {
     rmSync(graphSnapshot, { recursive: true, force: true });
     copyIfPresent(graphSource, graphSnapshot);
   }
-  copyIfPresent(join(main, '.opencode', 'package.json'), join(target, '.opencode', 'package.json'));
-  copyIfPresent(join(main, '.opencode', 'package-lock.json'), join(target, '.opencode', 'package-lock.json'));
-  copyIfPresent(join(main, '.opencode', 'tools', 'package.json'), join(target, '.opencode', 'tools', 'package.json'));
-  copyIfPresent(join(main, '.opencode', 'tools', 'package-lock.json'), join(target, '.opencode', 'tools', 'package-lock.json'));
-  installDependencies(join(target, '.opencode'));
-  installDependencies(join(target, '.opencode', 'tools'));
   installDependencies(join(target, 'cli'));
 
   const skillsSource = canonicalSkillsRoot(target) ?? canonicalSkillsRoot(main);
   if (skillsSource) {
-    const skillsDir = join(target, '.opencode', 'skills');
+    const skillsDir = join(target, '.agents', 'skills');
     mkdirSync(skillsDir, { recursive: true });
     for (const entry of CANONICAL_SKILLS) {
       const source = join(skillsSource, entry);
@@ -253,7 +245,6 @@ export function provisionWorktree(worktree: string, mainRoot: string): void {
     }
   }
 
-  copyIfPresent(join(main, 'commands'), join(target, '.opencode', 'commands'));
   refreshRegistry(target, main);
   for (const file of ['.env.local', 'projects.txt']) {
     const link = join(target, file);
