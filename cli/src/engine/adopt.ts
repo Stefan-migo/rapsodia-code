@@ -1,5 +1,5 @@
 import { execFileSync } from '../utils/exec';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative } from 'path';
 import { collectFiles, hashFile, hashTemplateFile, substituteVariables, TemplateOptions } from './template';
 import { Manifest, ManifestFile, normalizeManifestPath } from './manifest';
@@ -17,6 +17,9 @@ export const OWNED_PATHS = ['.agents/skills/**', '.pi/extensions/**'];
 
 export const NEVER_PATHS = ['DESIGN.md', 'SYSTEM-MAP.md', 'USER-GUIDE.md', 'wiki/**', 'scripts/**'];
 
+/** The pre-Pi surface Rapsodia wrote or depended on. It is reported, never deleted. */
+const RETIRED_ROOTS = ['.opencode', 'openspec', 'opencode.json', 'scripts/setup.sh'];
+
 /** Adopted projects may already carry this heading; matching it avoids duplicate defect sections. */
 const LEGACY_DEFECT_HEADING = '## Reporting Cortex Defects';
 
@@ -29,6 +32,7 @@ export interface AdoptPlan {
   injected: string[];
   seeded: string[];
   skipped: string[];
+  overwritten: string[];
 }
 
 export interface AdoptOptions {
@@ -45,6 +49,54 @@ function matches(path: string, pattern: string): boolean {
 }
 
 function isOwned(path: string): boolean { return OWNED_PATHS.some((pattern) => matches(path, pattern)); }
+
+/**
+ * Report the retired surface one entry at a time, classified by whether Rapsodia ever wrote inside
+ * it. A directory holding any manifest-recorded file is `removed`: the human can delete it once the
+ * project no longer uses OpenCode. Everything else is `leftover`: the project's own content, such as
+ * a skill it added under `.opencode/skills`, which no flag may touch. Nothing here deletes anything,
+ * and the plan stays one line per entry so it remains readable on a project with a large tree.
+ */
+function classifyRetiredSurface(targetDir: string, manifestPaths: Set<string>): { removed: string[]; leftover: string[] } {
+  const removed: string[] = [];
+  const leftover: string[] = [];
+
+  const normalized = (absolute: string): string => relative(targetDir, absolute).replace(/\\/g, '/');
+
+  // Early exit on the first recorded file: a retired tree can carry node_modules or a 3.8 MB
+  // openspec directory, and the plan only needs to know whether Rapsodia wrote inside it.
+  const holdsRecordedFile = (absolute: string): boolean => {
+    if (!statSync(absolute).isDirectory()) return manifestPaths.has(normalized(absolute));
+    for (const entry of readdirSync(absolute)) {
+      if (holdsRecordedFile(join(absolute, entry))) return true;
+    }
+    return false;
+  };
+
+  const record = (absolute: string): void => {
+    (holdsRecordedFile(absolute) ? removed : leftover).push(normalized(absolute));
+  };
+
+  for (const root of RETIRED_ROOTS) {
+    const absolute = join(targetDir, root);
+    if (!existsSync(absolute)) continue;
+    // `.opencode` is expanded so each skill stays visible next to the ones Rapsodia wrote.
+    if (root !== '.opencode' || !statSync(absolute).isDirectory()) {
+      record(absolute);
+      continue;
+    }
+    for (const entry of readdirSync(absolute)) {
+      const child = join(absolute, entry);
+      if (entry === 'skills' && statSync(child).isDirectory()) {
+        for (const skill of readdirSync(child)) record(join(child, skill));
+      } else {
+        record(child);
+      }
+    }
+  }
+
+  return { removed: removed.sort(), leftover: leftover.sort() };
+}
 
 function getDate(): string { return new Date().toISOString().split('T')[0]; }
 
@@ -81,7 +133,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   }
   const projectName = basename(targetDir) || 'project';
   const templateOptions: TemplateOptions = { projectName, projectType: 'default', date: getDate(), year: new Date().getFullYear().toString() };
-  const plan: AdoptPlan = { created: [], refreshed: [], removed: [], leftover: [], conflicting: [], injected: [], seeded: [], skipped: [] };
+  const plan: AdoptPlan = { created: [], refreshed: [], removed: [], leftover: [], conflicting: [], injected: [], seeded: [], skipped: [], overwritten: [] };
   const manifestWritePath = statePath(targetDir, 'manifest.json');
   // Read through the legacy path too: a dry run does not migrate the state directory, so
   // `.rapsodia-code/manifest.json` is absent until the real run renames it. Reading only the new
@@ -93,6 +145,9 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
     catch { oldManifest = undefined; }
   }
   const oldHashes = new Map((oldManifest?.files || []).map((file) => [normalizeManifestPath(file.path), file.hash]));
+  const retired = classifyRetiredSurface(targetDir, new Set([...oldHashes.keys()].map((path) => normalizeManifestPath(path))));
+  plan.removed.push(...retired.removed);
+  plan.leftover.push(...retired.leftover);
 
   for (const file of collectFiles(templateDir, templateDir).filter(isOwned)) {
     const source = join(templateDir, file);
@@ -108,7 +163,10 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
       if (!options.dryRun) writeFileSync(target, content);
     } else {
       plan.conflicting.push(file);
-      if (!options.dryRun && options.force) writeFileSync(target, content);
+      if (!options.dryRun && options.force) {
+        writeFileSync(target, content);
+        plan.overwritten.push(file);
+      }
     }
   }
 
@@ -142,6 +200,7 @@ export function adoptProject(targetDir: string, options: AdoptOptions, templateD
   }
   if (oldManifest) plan.skipped.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));
   else plan.seeded.push(join(PROJECT_STATE_DIR_NAME, 'manifest.json'));
+  plan.overwritten.sort();
   return plan;
 }
 

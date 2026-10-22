@@ -30,9 +30,10 @@ export async function adoptCommand(path: string | undefined, options: AdoptOptio
   if (!options.yes && !options.dryRun && !(await promptYesNo(`Adopt Rapsodia into "${targetDir}"?`))) { info('Adoption cancelled.'); return; }
   const plan = adoptProject(targetDir, options, TEMPLATE_DIR);
   heading(options.dryRun ? 'Rapsodia Adoption Plan (dry run)' : 'Rapsodia Adoption');
-  for (const [label, items] of [['Created', plan.created], ['Refreshed', plan.refreshed], ['Removed', plan.removed], ['Leftover', plan.leftover], ['Conflicting', plan.conflicting], ['Injected', plan.injected], ['Seeded', plan.seeded], ['Skipped', plan.skipped]] as const) {
+  for (const [label, items] of [['Created', plan.created], ['Refreshed', plan.refreshed], ['Removed', plan.removed], ['Leftover', plan.leftover], ['Conflicting', plan.conflicting], ['Overwritten', plan.overwritten], ['Injected', plan.injected], ['Seeded', plan.seeded], ['Skipped', plan.skipped]] as const) {
     info(`${label} (${items.length}):`); items.forEach((item) => info(`  ${item}`));
   }
+  for (const file of plan.overwritten) warn(`File was overwritten: ${file}`);
   if (plan.leftover.length > 0) {
     // Report the outcome, never prescribe it: these paths are the project's own, and no flag
     // overwrites them. The human decides what to do with the retired identity left behind.
@@ -41,9 +42,7 @@ export async function adoptCommand(path: string | undefined, options: AdoptOptio
   if (plan.conflicting.length > 0) {
     // Report the outcome, never prescribe it: after a forced overwrite the conflicts are gone, so
     // telling the user to re-run with --force would replace the only signal that it just happened.
-    warn(options.force && !options.dryRun
-      ? `${plan.conflicting.length} conflicting file(s) overwritten because --force was given.`
-      : 'Conflicting files are project-owned. Re-run with --force to overwrite them.');
+    if (!options.force || options.dryRun) warn('Conflicting files are project-owned. Re-run with --force to overwrite them.');
   }
   if (options.dryRun) warn('Dry run — no changes applied.'); else success('Rapsodia adopted successfully.');
 }
