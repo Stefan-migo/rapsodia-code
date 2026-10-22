@@ -159,6 +159,8 @@ waits for it.
 - P3 remains: `start`, `close`, `status`, `install`, and the command descriptions still name
   OpenCode; `close` still rewrites `opencode.json`; `status` still runs `opencode --version`.
 - `SYSTEM-MAP.md`, `USER-GUIDE.md`, and `README.md` still describe the OpenCode surface (P5).
+- `rapso update` on a project created by 1.0.3 was not exercised in P2. It will report the retired
+  template paths as deleted; migrating an already-adopted project is P5.
 - gga produced two false positives in P2: it claimed `exec.ts` used an unimported `execFileSync`
   (the function is defined in the same file and typecheck passes) and treated a read-only review as a
   verification gap. Treat its prose-level claims as advisory.
