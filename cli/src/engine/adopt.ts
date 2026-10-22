@@ -8,11 +8,12 @@ import { CLI_VERSION } from '../utils/version';
 import { mergeGitignore } from './gitignore';
 
 /**
- * The template paths Rapsodia owns. Pi reads project skills from `.agents/skills/`, so that is the
- * only surface adoption may create, refresh, or report as owned. The retired `.opencode/` tree is
- * no longer ours: a consumer that still carries one keeps it, and Pi ignores it.
+ * The template paths Rapsodia owns. Pi reads project skills from `.agents/skills/` and project
+ * extensions from `.pi/extensions/`, so those are the only surfaces adoption may create, refresh, or
+ * report as owned. The retired `.opencode/` tree is no longer ours: a consumer that still carries one
+ * keeps it, and Pi ignores it.
  */
-export const OWNED_PATHS = ['.agents/skills/**'];
+export const OWNED_PATHS = ['.agents/skills/**', '.pi/extensions/**'];
 
 export const NEVER_PATHS = ['DESIGN.md', 'SYSTEM-MAP.md', 'USER-GUIDE.md', 'wiki/**', 'scripts/**'];
 
