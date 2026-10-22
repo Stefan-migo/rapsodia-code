@@ -1,6 +1,6 @@
 # Rapsodia
 
-Rapsodia is the project workflow CLI published as [`rapsodia-code`](https://www.npmjs.com/package/rapsodia-code). Its `rapso` command scaffolds projects, manages sessions and dependencies, analyzes session patterns, installs Rapsodia into existing projects, and creates isolated ODD worktrees.
+Rapsodia is the `rapso` CLI for preparing project context, managing Rapsodia template files, analyzing session patterns, and creating isolated ODD worktrees. The Pi runtime reads project instructions from `AGENTS.md`, skills from `.agents/skills/`, and trusted project extensions from `.pi/extensions/`.
 
 The repository is [Rapsodia](https://github.com/Stefan-migo/rapsodia-code).
 
@@ -10,7 +10,7 @@ The repository is [Rapsodia](https://github.com/Stefan-migo/rapsodia-code).
 npm install -g rapsodia-code
 ```
 
-Node.js 18 or newer is required.
+Node.js 18 or newer is required. `rapso install` checks dependencies and prints installation steps; it does not install dependencies.
 
 ## Quick start
 
@@ -18,8 +18,11 @@ Create a project without interactive prompts or a Git repository:
 
 ```bash
 rapso init demo --no-git --yes
-rapso status
+cd demo
+rapso start
 ```
+
+`rapso start` writes local prepared-context state to `.rapsodia-code/session.json` and builds `.rapsodia-code/prelude.md`. It does not open an Engram session or launch an agent by default. Open the project in Pi; read the prelude before the first task. To opt in to launching the configured agent (`RAPSO_AGENT`, default `gentle-shell`) after preparation, use `rapso start --run`.
 
 For an existing project, install the workflow files in place:
 
@@ -31,28 +34,32 @@ rapso adopt --yes
 
 | Command | Description |
 |---------|-------------|
-| `rapso init [options] <name>` | Scaffold a new Rapsodia project |
-| `rapso install [options]` | Check and install dependencies |
-| `rapso start [options]` | Start a session: load context and launch opencode |
-| `rapso close [options]` | Close a session: summarize, export, cleanup |
-| `rapso status [options]` | Show brain health overview |
-| `rapso update [options]` | Update brain template from latest version |
-| `rapso adopt [options] [path]` | Install Rapsodia into an existing project |
-| `rapso analyze [options]` | Analyze session patterns and suggest improvements |
+| `rapso init` | Scaffold a new Rapsodia project |
+| `rapso install` | Check dependencies and print installation steps (does not install) |
+| `rapso start` | Write the prepared-context record and build the prelude; launch an agent only with `--run` |
+| `rapso context` | Build only the prelude; no prepared-context record or agent |
+| `rapso close` | Export the wiki, clean up prepared context, and optionally write a retrospective |
+| `rapso status` | Report prepared context and the `gentle-shell` agent, along with project/tool health |
+| `rapso update` | Check or update Rapsodia template files |
+| `rapso adopt` | Install Rapsodia into an existing project |
+| `rapso analyze` | Analyze session patterns and suggest improvements |
 | `rapso worktree` | Create and manage isolated ODD worktrees |
 
-Run `rapso <command> --help` for command-specific options. Run `rapso worktree --help` for its worktree operations.
+`rapso start` supports `--no-prelude`, `--run`, and `--dry-run`; it has no `--no-open` option. `rapso context` supports `--dry-run`. `rapso close` supports `--message`, `--no-export`, and `--retrospective`. Run `rapso <command> --help` for command-specific options. Run `rapso worktree --help` for its worktree operations.
 
-## Included skill pack
+## Pi resources
 
-The CLI ships the skills a generated project runs on, as template content under `.opencode/skills/`. `rapso init` writes them into a new project, `rapso adopt` installs them into an existing one, and `rapso update` refreshes them against the manifest.
+- `AGENTS.md` is the project instruction file Pi reads natively.
+- Project skills live in `.agents/skills/`; the template includes `rapso-session` and `design-system`.
+- Project extensions live in `.pi/extensions/`; the template includes `rapsodia-context.ts`. Pi loads project extensions only after project trust is granted.
+- Optional project MCP servers can be configured in `.pi/mcp.json`; this too requires project trust.
+- `.rapsodia-code/` contains local ignored state, including the prepared-context record and prelude.
 
-| Skill | What it carries |
-|---|---|
-| `rapso-persona` | The Senior Architect identity, the Ponytail post-write check, the five-step execution gate, and Graphify integration |
-| `rapso-session` | The structured planning-session protocol and its Engram capture rules |
-| `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-help` | The post-write simplification check over written code, and its tooling |
-| `bootstrap`, `design-system`, `graphify` | Project bootstrap, the UI design rules, and the knowledge-graph integration |
+The `rapsodia-context` extension refreshes the prelude in the background when a Pi session starts if the existing prelude is at least five minutes old or missing. The refresh has a 60-second timeout. It stays quiet if `rapso` is unavailable or is too old to recognize `rapso context`. On the first user run of a session, it adds a `rapso_context` prompt section pointing Pi to the prelude. Without project trust, the extension does not load; follow the prelude-reading rule in `AGENTS.md` instead.
+
+`gentle-engram` owns Engram session start, summaries, and passive capture. Rapsodia reads Engram context when building the prelude; `rapso start` and `rapso close` do not start or end an Engram session. Graphify remains the code graph; refresh it with `graphify . --update`. An optional Graphify MCP server can be configured in `.pi/mcp.json`.
+
+The retired OpenCode configuration and resources, SDD files and commands, Ponytail skill pack, `rapso-persona`, and `scripts/setup.sh` are not part of this runtime. `adopt` and `update` do not delete retired files; review any paths they report and remove obsolete files yourself if desired.
 
 ## License
 
