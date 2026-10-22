@@ -35,9 +35,9 @@ export async function adoptCommand(path: string | undefined, options: AdoptOptio
   }
   for (const file of plan.overwritten) warn(`File was overwritten: ${file}`);
   if (plan.leftover.length > 0) {
-    // Report the outcome, never prescribe it: these paths are the project's own, and no flag
-    // overwrites them. The human decides what to do with the retired identity left behind.
-    warn(`${plan.leftover.length} retired path(s) kept because their content differs from what Rapsodia wrote.`);
+    // Report the outcome, never prescribe it: no flag touches these paths, and Rapsodia cannot prove
+    // it wrote them — the project may own them, or they may be unreadable. The human decides.
+    warn(`${plan.leftover.length} retired path(s) kept: Rapsodia cannot prove it wrote them, so they stay until you decide.`);
   }
   if (plan.conflicting.length > 0) {
     // Report the outcome, never prescribe it: after a forced overwrite the conflicts are gone, so
