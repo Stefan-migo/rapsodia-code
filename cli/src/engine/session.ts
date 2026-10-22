@@ -130,12 +130,8 @@ export function generateRetrospective(
 
   const warnText = warnings.join(' ').toLowerCase();
   if (warnText.includes('graphify') || !existsSync(resolveGraphifyPaths(projectDir).graphJson)) {
-    gaps.push('Graphify report not found at session start');
+    gaps.push('Graphify report not found when the context was finalized');
     suggestions.push('Run `graphify . --update` to enable code structure awareness');
-  }
-  if (warnText.includes('engram')) {
-    gaps.push('Engram was unavailable while preparing the context');
-    suggestions.push('Ensure Engram is available for memory persistence');
   }
 
   if (gaps.length === 0) {

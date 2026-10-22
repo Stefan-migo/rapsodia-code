@@ -68,7 +68,7 @@ export async function closeCommand(options: CloseOptions): Promise<void> {
     step('Generating session retrospective');
     const warnings: string[] = [];
     if (!existsSync(resolveGraphifyPaths(projectDir).graphJson)) {
-      warnings.push('Graphify report not found at session start');
+      warnings.push('Graphify report not found when the context was finalized');
     }
     const startedAt = sessionInfo?.startedAt ? new Date(sessionInfo.startedAt) : undefined;
     const retroContent = generateRetrospective(projectDir, summary || '', warnings, startedAt);

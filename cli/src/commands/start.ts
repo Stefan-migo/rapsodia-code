@@ -29,8 +29,6 @@ export async function startCommand(options: StartOptions): Promise<void> {
   info(`Directory: ${projectDir}`);
 
   const agent = process.env.RAPSO_AGENT || DEFAULT_AGENT;
-  const sessionId = generateSessionId();
-  info(`Context: ${sessionId}`);
 
   if (options.dryRun) {
     heading('Dry Run — No Actions Taken');
@@ -52,6 +50,9 @@ export async function startCommand(options: StartOptions): Promise<void> {
     }
     return;
   }
+
+  const sessionId = generateSessionId();
+  info(`Context: ${sessionId}`);
 
   prepareContext(projectDir, sessionId, projectName);
 
