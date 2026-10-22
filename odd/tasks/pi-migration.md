@@ -25,6 +25,7 @@ P1 only. Commit is recorded after the work unit lands.
 | T1 | S4, S8 | Write the feature document and carry the proposal into the branch | inline | `191518c` |
 | T2 | S5, S9 | Archive `openspec/` to `docs/archive/openspec-2026-10.tar.gz` and delete the directory | inline | `a208433` (+ `diff -r` verification) |
 | T3 | S1 | Remove `.opencode/agents/rapso-*.md` and the `agent` entries in `opencode.json` | inline | `c8f19c0`, `ad1b5ca` |
+| T3b | S1 | Remove the OpenCode tool and plugin surface (`tools/*`, `plugins/graphify.js`) | inline | `766dc92` |
 | T4 | S2 | Remove the Ponytail pack: `.opencode` symlinks, `skills/ponytail-plan`, the `AGENTS.md` section | inline | `8c6adf3`, `f876c38` |
 | T5 | S5 | Remove `.opencode/skills/{sdd,graphify}` and every `/sdd-*` reference in `AGENTS.md` | inline | `8c6adf3`, `f876c38` |
 | T6 | S3, S6 | Remove `bootstrap` (OpenCode/GSD-bound) and retire the `rapso-persona` symlink | inline | `8c6adf3`, `e1cad81` |
@@ -95,7 +96,7 @@ before P2 exists. Recorded as a P2 follow-up below.
 
 ### Review slice
 
-P1 landed 8 commits and ~1551 authored changed lines (mostly deletions and the proposal). That is
+P1 landed 9 commits and ~1625 authored changed lines (mostly deletions and the proposal). That is
 past the ~400-line review slice. The delivery strategy for a slice this size is a PR, and push/PR
 creation is the human's decision, so the boundary is recorded here and the branch waits for it.
 
@@ -118,4 +119,4 @@ creation is the human's decision, so the boundary is recorded here and the branc
 - **L6** (approval): "ok vamos con P1".
 - **L7** (execution decisions): worktree "Sí, con rapso worktree create pi-migration"; `openspec/` "Empaquetar en tar y borrar".
 - **L8** (exploration correction): `bootstrap` was marked KEEP in the proposal, but reading `.opencode/skills/bootstrap/SKILL.md` shows 28 OpenCode/GSD/`.planning` references and agent-team generation. It is now DROP; `docs/pi-migration.md` was corrected before the first commit.
-- **L9** (P1 delivered): 8 commits on `odd/pi-migration` (`191518c`..`f876c38`). The four retired paths are absent, the adopt injection headings survive, `npm run typecheck` passes, and `graphify . --update` rebuilt the graph after pruning 49 deleted sources. `openspec/` was deleted in the main worktree only after `diff -r` proved the committed tar matched it. Follow-ups recorded above; none of them block P1.
+- **L9** (P1 delivered): 9 commits on `odd/pi-migration` (`191518c`..`a94e272`). The four retired paths are absent, the adopt injection headings survive, `npm run typecheck` passes, and `graphify . --update` rebuilt the graph after pruning 49 deleted sources. `openspec/` was deleted in the main worktree only after `diff -r` proved the committed tar matched it. Follow-ups recorded above; none of them block P1.
