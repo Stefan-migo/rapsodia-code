@@ -18,7 +18,9 @@ export const OWNED_PATHS = ['.agents/skills/**', '.pi/extensions/**'];
 export const NEVER_PATHS = ['DESIGN.md', 'SYSTEM-MAP.md', 'USER-GUIDE.md', 'wiki/**', 'scripts/**'];
 
 /** The pre-Pi surface Rapsodia wrote or depended on. It is reported, never deleted. */
-const RETIRED_ROOTS = ['.opencode', 'openspec', 'opencode.json', 'scripts/setup.sh'];
+// `.planning` came from the retired bootstrap skill (GSD). It holds the project's own plan files, so
+// it is reported and never claimed as Rapsodia's.
+const RETIRED_ROOTS = ['.opencode', '.planning', 'openspec', 'opencode.json', 'scripts/setup.sh'];
 
 /**
  * Paths the pack itself put in a project, whatever the manifest of the version that created it
