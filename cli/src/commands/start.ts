@@ -22,8 +22,6 @@ export async function startCommand(options: StartOptions): Promise<void> {
     process.exit(1);
   }
 
-  for (const move of migrateLegacyState(projectDir)) info(`State migration: ${move}`);
-
   const projectName = readProjectName(projectDir);
   info(`Project: ${projectName}`);
   info(`Directory: ${projectDir}`);
@@ -53,6 +51,8 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const sessionId = generateSessionId();
   info(`Context: ${sessionId}`);
+
+  for (const move of migrateLegacyState(projectDir)) info(`State migration: ${move}`);
 
   prepareContext(projectDir, sessionId, projectName);
 
