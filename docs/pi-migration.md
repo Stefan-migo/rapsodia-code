@@ -205,6 +205,14 @@ stays as the untrusted fallback and no longer points at the removed `start --no-
    `cli/src/template/USER-GUIDE.md`.
 3. Rebuild `cli/dist/` (gitignored; the merge does not update it) and bump the version.
 
+Delivered: `adopt` reports the retired OpenCode surface as `Removed` (paths the manifest proves
+Rapsodia wrote) and `Leftover` (paths it cannot prove, which stay), and names every file `--force`
+overwrites. `update` reports retired manifest paths as a migration plan, no longer treats an existing
+file the manifest never recorded as new, and no longer calls a project up to date when only retired
+paths differ. `init --force` states what it actually does and refuses to write the template through a
+symlink. `scripts/rapso-sync.sh` provisions the Pi extension. `README.md`, `USER-GUIDE.md` and
+`SYSTEM-MAP.md` describe the Pi surface. Version is `1.1.0`.
+
 ## 7. Verification
 
 This repository has **no test harness**: `vitest` is configured in `cli/` with zero test files, and
@@ -231,7 +239,7 @@ This repository has **no test harness**: `vitest` is configured in `cli/` with z
 | 2 | `adopt.ts` injects three `AGENTS.md` sections by exact heading; renaming a heading silently stops injection | Update `markdownSections()` in the same commit as the `AGENTS.md` rewrite; assert in the scratch scenario |
 | 3 | Two owners of the Engram session would double-write memory | D5: `gentle-engram` owns lifecycle; `rapso` only produces the prelude |
 | 4 | A `session_start` extension that blocks startup degrades every session | Run the refresh off the critical path; fail soft and log |
-| 5 | `.opencode` → `.agents` changes what `rapso update` reports as deleted | Test the upgrade path from a 1.0.3-created project |
+| 5 | `.opencode` → `.agents` changes what `rapso update` reports as deleted | Tested in P5 against a 1.0.0-shaped and a 1.0.3-shaped consumer; the retired paths are reported, never deleted |
 | 6 | Project trust gaps: `.pi/mcp.json` and project skills are inert until trust is granted | Document, and never make Rapsodia's core value depend on project-scoped MCP |
 
 ## 9. Out of scope
