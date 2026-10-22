@@ -2,9 +2,9 @@ import { existsSync } from 'fs';
 import { resolve, join } from 'path';
 import * as readline from 'readline';
 import { adoptProject, isDirty } from '../engine/adopt';
+import type { AdoptOptions } from '../engine/adopt';
 import { error, heading, info, success, warn } from '../utils/logger';
 
-interface AdoptOptions { dryRun?: boolean; yes?: boolean; force?: boolean; }
 const TEMPLATE_DIR = join(__dirname, '..', 'src', 'template');
 
 function promptYesNo(question: string): Promise<boolean> {
@@ -21,9 +21,9 @@ export async function adoptCommand(path: string | undefined, options: AdoptOptio
     // working tree dirty, so the second run would always need --force. The structural
     // protections cover the real risk: an owned file whose content differs from what Rapsodia
     // last recorded is never replaced unless --force is given, and the merge targets
-    // (AGENTS.md, .gitignore, opencode.json) are merged in place, never reset to the template.
+    // (AGENTS.md, .gitignore) are merged in place, never reset to the template.
     // So this informs instead of blocking.
-    warn('Working tree is dirty. Rapsodia writes only its own files and the merge targets it merges into (AGENTS.md, .gitignore, opencode.json); uncommitted work anywhere else is left alone.');
+    warn('Working tree is dirty. Rapsodia writes only its own files and the merge targets it merges into (AGENTS.md, .gitignore); uncommitted work anywhere else is left alone.');
   } else if (dirty === undefined) {
     warn('Could not determine whether the working tree is dirty. Rapsodia will still classify existing files before writing.');
   }

@@ -30,7 +30,11 @@ export interface AdoptPlan {
   skipped: string[];
 }
 
-interface AdoptOptions { dryRun?: boolean; yes?: boolean; force?: boolean; }
+export interface AdoptOptions {
+  dryRun?: boolean;
+  yes?: boolean;
+  force?: boolean;
+}
 
 function matches(path: string, pattern: string): boolean {
   const normalizedPath = path.replace(/\\/g, '/');
