@@ -32,7 +32,7 @@ export async function installCommand(options: InstallOptions): Promise<void> {
   }
 
   if (allOk) {
-    info('Everything looks good. Run `opencode` to start.');
+    info('Everything looks good. Run `gentle-shell` to start.');
     return;
   }
 

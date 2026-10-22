@@ -41,17 +41,17 @@ program
 
 program
   .command('start')
-  .description('Start a session: load context and launch opencode')
+  .description('Prepare the project context (prelude), optionally launching the agent')
   .option('--no-prelude', 'skip context pre-load')
-  .option('--no-open', 'prepare session without launching opencode')
-  .option('--dry-run', 'show what would happen without launching')
+  .option('--run', 'launch the agent after preparing (RAPSO_AGENT, default gentle-shell)')
+  .option('--dry-run', 'show what would happen without writing')
   .action(async (options) => {
     await startCommand(options);
   });
 
 program
   .command('close')
-  .description('Close a session: summarize, export, cleanup')
+  .description('Export the wiki, clean up the prepared context, and generate a retrospective')
   .option('--message <text>', 'session summary text')
   .option('--no-export', 'skip wiki export')
   .option('--retrospective', 'generate session retrospective')
