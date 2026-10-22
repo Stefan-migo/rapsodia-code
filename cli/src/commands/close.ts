@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import * as readline from 'readline';
 import { step, info, success, warn, heading } from '../utils/logger';
-import { getSessionInfo, exportWiki, clearPreparedContext, generateRetrospective, saveRetrospective } from '../engine/session';
+import { getSessionInfo, exportWiki, clearPreparedContext, generateRetrospective, saveRetrospective, errorMessage } from '../engine/session';
 import { resolveGraphifyPaths } from '../engine/project';
 
 interface CloseOptions {
@@ -42,7 +42,9 @@ export async function closeCommand(options: CloseOptions): Promise<void> {
 
   if (options.export !== false) {
     step('Exporting wiki');
-    exportWiki(projectDir);
+    if (!exportWiki(projectDir)) {
+      warn('Wiki export did not complete; the project memory may be stale.');
+    }
   }
 
   step('Cleaning up prepared context');
@@ -53,8 +55,8 @@ export async function closeCommand(options: CloseOptions): Promise<void> {
     } else {
       info('Nothing to clean up');
     }
-  } catch (e: any) {
-    warn(`Failed to clean up prepared context: ${e.message}`);
+  } catch (e: unknown) {
+    warn(`Failed to clean up prepared context: ${errorMessage(e)}`);
   }
 
   let summary = options.message;

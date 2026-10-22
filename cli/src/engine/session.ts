@@ -29,6 +29,10 @@ export function generateSessionId(): string {
   return `rapso-${date}-${suffix}`;
 }
 
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** Record what `rapso start` prepared. Local state only; no MCP call. */
 export function prepareContext(projectDir: string, sessionId: string, projectName: string): void {
   const rapsodiaDir = stateDir(projectDir);
@@ -79,8 +83,8 @@ export function exportWiki(projectDir: string): boolean {
     }
     success('Wiki export complete');
     return true;
-  } catch (e: any) {
-    warn(`Wiki export skipped: ${e.message}`);
+  } catch (e: unknown) {
+    warn(`Wiki export skipped: ${errorMessage(e)}`);
     return false;
   }
 }
