@@ -1,7 +1,0 @@
-{
-  "name": "opencode-custom-tools",
-  "private": true,
-  "dependencies": {
-    "@opencode-ai/plugin": "latest"
-  }
-}
