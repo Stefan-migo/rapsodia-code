@@ -2,10 +2,10 @@
 name: design-system
 description: UI/UX design intelligence — generate consistent designs using DESIGN.md and design system rules
 license: MIT
-compatibility: opencode
+compatibility: pi
 metadata:
   workflow: design
-  audience: build agent
+  audience: implementing agent
 ---
 
 ## What It Does
