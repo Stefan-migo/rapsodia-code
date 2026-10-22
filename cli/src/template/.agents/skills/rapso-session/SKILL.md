@@ -2,6 +2,7 @@
 name: rapso-session
 description: "Trigger: discuss, analicemos, brainstorm, planeemos, cotización, session, rapso-session. Structured planning sessions with automatic decision capture for architecture discussions, requirement analysis, quotes, and pre-ODD work."
 license: MIT
+compatibility: pi
 metadata:
   author: Stefan-migo
   version: "2.1"
@@ -14,7 +15,7 @@ Load when entering **planning mode** — discussing architecture, analyzing requ
 
 Do NOT load during ODD task implementation or quick Q&A.
 
-> **Write authority**: this skill creates, moves and migrates files under `.rapsodia-code/sessions/`. It must run under the write-capable executor agent (`@Rapso-Developer`). The read-only `@Rapso-Planner` never performs these writes — it delegates them. Session bookkeeping is knowledge management, not code modification.
+> **Write authority**: this skill creates, moves and migrates files under `.rapsodia-code/sessions/`. It must run in a session with write access; a read-only or planning-only subagent delegates those writes. Session bookkeeping is knowledge management, not code modification.
 
 ## Session Lifecycle
 
@@ -182,4 +183,4 @@ Do NOT touch directories already inside `open/`, `ready-for-odd/`, or `archived/
 6. **Resume support**: before init, check `.rapsodia-code/sessions/open/` and Engram for an existing session on the same topic.
 7. **The directory is the state**: never leave a closed session in `open/`.
 8. **Decision hygiene**: a reversed decision is superseded, never left as current.
-9. **Write authority**: only the write-capable executor agent touches files; the read-only Planner delegates.
+9. **Write authority**: only a write-capable session touches files; a read-only or planning-only subagent delegates.
