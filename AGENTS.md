@@ -90,7 +90,7 @@ ODD is the only workflow in this repository. Spec-Driven Development was retired
 ```
 Step 1: GRAPH CHECK — read graphify-out/GRAPH_REPORT.md, then graphify query/path before editing
 Step 2: ATOMIC COMMIT — one concern per commit, ≤5 files
-Step 3: VERIFY — npm run typecheck (from cli/), npm run build, manual scenarios (no lint, no test harness)
+Step 3: VERIFY — npm run typecheck (from cli/), npm run build, npm test, manual scenarios (no lint)
 Step 4: REVIEW SLICE — keep work units around 400 authored lines; a high-risk item gets its own commit
 Step 5: FINALIZE — mem_save the discoveries
 ```
@@ -118,8 +118,8 @@ Instructions, Discoveries, Accomplished, Next Steps, and Relevant Files.
 - Run `npm run typecheck` (from `cli/`) before considering work complete. This repository has **no lint script**.
 - Follow existing project conventions
 - Atomic commits: one concern per commit, descriptive messages
-- This repository has **no test harness**. `vitest` is configured in `cli/`, but there are zero test files, so `npm test` exits 1 with "No test files found". Do not claim test coverage that does not exist, and do not require tests for a change until a harness is deliberately introduced.
-- Verify code changes with `npm run typecheck`, `npm run build`, and concrete manual shell scenarios. Report the exact commands and their real output — never infer a pass from intent.
+- `cli/test/` holds a real harness: `npm test` runs `vitest run` and must exit 0. It was introduced deliberately with the release gate (`cli/scripts/verify-template-tracked.mjs`), and a change to that gate must add or update its cases. No other coverage exists, so never claim coverage wider than `cli/test/`.
+- Verify code changes with `npm run typecheck`, `npm run build`, `npm test`, and concrete manual shell scenarios. Report the exact commands and their real output — never infer a pass from intent.
 - NEVER commit secrets or credentials
 
 ## Defect-Report Privacy Contract

@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Stefan-migo/rapsodia-code.git",
+    "url": "git+https://github.com/Stefan-migo/rapsodia-code.git",
     "directory": "cli"
   },
   "homepage": "https://github.com/Stefan-migo/rapsodia-code#readme",
@@ -33,6 +33,7 @@
   ],
   "scripts": {
     "build": "node esbuild.config.js",
+    "prepack": "node scripts/verify-template-tracked.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
